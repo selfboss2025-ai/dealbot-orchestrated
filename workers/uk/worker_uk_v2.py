@@ -37,7 +37,6 @@ class DealWorkerUK:
         self.bot = Bot(token=self.bot_token)
         self.processed_asins = set()
         self.last_scrape_time = None
-        self.db_file = '/tmp/worker_uk_deals.json'
         self.last_message_id = 0
         
         # Telethon client
@@ -45,36 +44,9 @@ class DealWorkerUK:
         self.api_hash = os.getenv('TELEGRAM_API_HASH', '')
         self.phone = os.getenv('TELEGRAM_PHONE', '')
         
-        # Carica i deals già processati dal database
-        self._load_processed_deals()
-        
         logger.info(f"🤖 Worker UK v2 inizializzato")
         logger.info(f"📺 Canale sorgente: {self.source_channel_id}")
         logger.info(f"📤 Canale pubblicazione: {self.publish_channel_id}")
-
-    def _load_processed_deals(self):
-        """Carica i deals già processati dal database locale"""
-        try:
-            if os.path.exists(self.db_file):
-                with open(self.db_file, 'r') as f:
-                    data = json.load(f)
-                    self.processed_asins = set(data.get('processed_asins', []))
-                    self.last_message_id = data.get('last_message_id', 0)
-                    logger.info(f"Caricati {len(self.processed_asins)} deals già processati")
-        except Exception as e:
-            logger.warning(f"Errore caricamento database: {e}")
-
-    def _save_processed_deals(self):
-        """Salva i deals processati nel database locale"""
-        try:
-            with open(self.db_file, 'w') as f:
-                json.dump({
-                    'processed_asins': list(self.processed_asins),
-                    'last_message_id': self.last_message_id,
-                    'last_updated': datetime.now().isoformat()
-                }, f)
-        except Exception as e:
-            logger.warning(f"Errore salvataggio database: {e}")
 
     def extract_asin_from_url(self, url: str) -> Optional[str]:
         """Estrae ASIN da URL Amazon - supporta vari formati"""
@@ -223,7 +195,6 @@ class DealWorkerUK:
             # Valida deal
             if self.validate_deal(deal):
                 self.processed_asins.add(asin)
-                self._save_processed_deals()
                 logger.info(f"✅ Deal estratto: {asin} - £{current_price_pounds:.2f} ({discount_pct}% off) - {title}")
                 return deal
             else:
@@ -302,7 +273,6 @@ class DealWorkerUK:
                         # Aggiorna last_message_id
                         if message.id > self.last_message_id:
                             self.last_message_id = message.id
-                            self._save_processed_deals()
                         
                         # Parsa il messaggio
                         deal = self.parse_message(message.text)
