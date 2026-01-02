@@ -15,8 +15,6 @@ from urllib.parse import quote
 from flask import Flask, jsonify
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import TelegramError
-from telethon import TelegramClient
-from telethon.errors import SessionPasswordNeededError
 
 # Configurazione logging
 logging.basicConfig(
@@ -36,11 +34,6 @@ class DealWorkerUK:
         self.bot = Bot(token=self.bot_token)
         self.processed_asins = set()
         self.last_scrape_time = None
-        
-        # Telethon client per scraping
-        self.api_id = int(os.getenv('TELEGRAM_API_ID', '12345'))  # Placeholder
-        self.api_hash = os.getenv('TELEGRAM_API_HASH', 'placeholder')  # Placeholder
-        self.phone = os.getenv('TELEGRAM_PHONE', '')
         
         logger.info(f"🤖 Worker UK v2 inizializzato")
         logger.info(f"📺 Canale sorgente: {self.source_channel_id}")
@@ -65,7 +58,7 @@ class DealWorkerUK:
         
         return None
 
-    def parse_message(self, text: str, photo_url: Optional[str] = None) -> Optional[Dict]:
+    def parse_message(self, text: str, photo_file_id: Optional[str] = None) -> Optional[Dict]:
         """
         Parsa il formato specifico di NicePriceDeals:
         About £X.XX (prezzo)
@@ -176,7 +169,7 @@ class DealWorkerUK:
                 'current_price_pence': current_price_pence,
                 'list_price_pence': list_price_pence,
                 'discount_pct': discount_pct,
-                'image_url': photo_url,
+                'photo_file_id': photo_file_id,  # Usa file_id di Telegram
                 'country': self.country,
                 'channel_id': self.source_channel_id,
                 'scraped_at': datetime.now().isoformat()
@@ -225,107 +218,42 @@ class DealWorkerUK:
         
         return True
 
-    async def scrape_channel_with_telethon(self) -> List[Dict]:
+    async def scrape_channel(self) -> List[Dict]:
         """
-        Scrape del canale Telegram usando Telethon
-        Legge i messaggi reali dal canale @NicePriceDeals
+        Scrape del canale Telegram per deals Amazon
+        Usa messaggi di test per ora
         """
         deals = []
         
         try:
-            # Se non abbiamo credenziali Telethon, usa fallback
-            if not self.api_id or self.api_id == 12345:
-                logger.warning("Credenziali Telethon non configurate, usando fallback")
-                return await self._get_test_deals()
+            logger.info(f"🔍 Scraping canale {self.source_channel_id}...")
             
-            logger.info(f"🔍 Scraping canale {self.source_channel_id} con Telethon...")
-            
-            # Crea client Telethon
-            client = TelegramClient('session_uk', self.api_id, self.api_hash)
-            
-            try:
-                await client.start(phone=self.phone)
-                
-                # Leggi ultimi 50 messaggi dal canale
-                async for message in client.iter_messages(self.source_channel_id, limit=50):
-                    try:
-                        # Salta messaggi senza testo
-                        if not message.text:
-                            continue
-                        
-                        # Estrai URL foto se disponibile
-                        photo_url = None
-                        if message.photo:
-                            # Scarica la foto e ottieni l'URL
-                            photo_path = await message.download_media()
-                            if photo_path:
-                                # Converti il percorso in URL (per ora usa il percorso locale)
-                                photo_url = f"file://{photo_path}"
-                                logger.debug(f"Foto scaricata: {photo_url}")
-                        
-                        # Parsa il messaggio
-                        deal = self.parse_message(message.text, photo_url)
-                        if deal:
-                            deals.append(deal)
-                    
-                    except Exception as e:
-                        logger.debug(f"Errore processing messaggio: {e}")
-                        continue
-                
-                self.last_scrape_time = datetime.now()
-                logger.info(f"✅ Scraping completato: {len(deals)} deals trovati")
-                
-            finally:
-                await client.disconnect()
-            
-        except Exception as e:
-            logger.error(f"❌ Errore scraping Telethon: {e}", exc_info=True)
-            # Fallback a messaggi di test
-            logger.info("Usando messaggi di test come fallback...")
-            deals = await self._get_test_deals()
-        
-        return deals
-
-    async def scrape_channel(self) -> List[Dict]:
-        """
-        Scrape del canale Telegram
-        Usa Telethon se disponibile, altrimenti fallback a test messages
-        """
-        # Per ora usa sempre fallback (Telethon richiede credenziali aggiuntive)
-        # In produzione, implementare Telethon con credenziali corrette
-        logger.info(f"🔍 Scraping canale {self.source_channel_id}...")
-        
-        # Usa fallback a test messages
-        deals = await self._get_test_deals()
-        
-        self.last_scrape_time = datetime.now()
-        logger.info(f"✅ Scraping completato: {len(deals)} deals trovati")
-        
-        return deals
-
-    async def _get_test_deals(self) -> List[Dict]:
-        """Messaggi di test per sviluppo/debug"""
-        deals = []
-        
-        test_messages = [
-            {
-                'text': """About £2.49 💥 50% Price drop https://www.amazon.co.uk/dp/B0DS63GM2Z/?tag=frb-dls-21&psc=1&smid=a3p5rokl5a1ole
+            # Messaggi di test nel formato di NicePriceDeals
+            test_messages = [
+                {
+                    'text': """About £2.49 💥 50% Price drop https://www.amazon.co.uk/dp/B0DS63GM2Z/?tag=frb-dls-21&psc=1&smid=a3p5rokl5a1ole
 Ravensburger Disney Stitch Mini Memory Game - Matching Picture Snap Pairs Game
 #ad Price and promotions are accurate at the time of posting but can change or expire at anytime""",
-                'photo': 'https://m.media-amazon.com/images/I/71-qKJqKqKL._AC_SY200_.jpg'
-            },
-            {
-                'text': """About £9.99 💥 40% Price drop https://www.amazon.co.uk/dp/B0ABCDEF12/?tag=frb-dls-21
+                    'photo_file_id': None
+                },
+                {
+                    'text': """About £9.99 💥 40% Price drop https://www.amazon.co.uk/dp/B0ABCDEF12/?tag=frb-dls-21
 Sony WH-CH720 Wireless Headphones
 #ad Price and promotions are accurate at the time of posting but can change or expire at anytime""",
-                'photo': 'https://m.media-amazon.com/images/I/61-qKJqKqKL._AC_SY200_.jpg'
-            },
-        ]
-        
-        for msg in test_messages:
-            deal = self.parse_message(msg['text'], msg.get('photo'))
-            if deal:
-                deals.append(deal)
+                    'photo_file_id': None
+                },
+            ]
+            
+            for msg in test_messages:
+                deal = self.parse_message(msg['text'], msg.get('photo_file_id'))
+                if deal:
+                    deals.append(deal)
+            
+            self.last_scrape_time = datetime.now()
+            logger.info(f"✅ Scraping completato: {len(deals)} deals trovati")
+            
+        except Exception as e:
+            logger.error(f"❌ Errore scraping: {e}", exc_info=True)
         
         return deals
 
@@ -399,19 +327,19 @@ Sony WH-CH720 Wireless Headphones
             message = self.format_deal_message(deal)
             reply_markup = self.build_sharing_buttons(deal, affiliate_link)
             
-            # Posta con immagine se disponibile
-            if deal.get('image_url'):
+            # Posta con immagine se disponibile (usa file_id di Telegram)
+            if deal.get('photo_file_id'):
                 try:
                     await self.bot.send_photo(
                         chat_id=self.publish_channel_id,
-                        photo=deal['image_url'],
+                        photo=deal['photo_file_id'],
                         caption=message,
                         parse_mode='Markdown',
                         reply_markup=reply_markup
                     )
                     logger.info(f"✅ Deal postato con foto: {deal['asin']}")
                 except Exception as e:
-                    logger.warning(f"Errore invio foto ({deal['image_url']}), provo senza: {e}")
+                    logger.warning(f"Errore invio foto, provo senza: {e}")
                     await self.bot.send_message(
                         chat_id=self.publish_channel_id,
                         text=message,
