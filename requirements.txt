@@ -14,7 +14,6 @@ Flask==3.0.0
 
 # Parsing e regex avanzato
 beautifulsoup4==4.12.2
-lxml==4.9.3
 
 # Gestione configurazione
 python-dotenv==1.0.0
