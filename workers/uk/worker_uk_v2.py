@@ -203,10 +203,13 @@ class DealWorkerUK:
             
             logger.info("🔍 Scraping con Telethon...")
             
-            client = TelegramClient('session_uk', self.api_id, self.api_hash)
+            # Usa session_uk in /tmp per evitare problemi di permessi in Docker
+            session_path = '/tmp/session_uk'
+            client = TelegramClient(session_path, self.api_id, self.api_hash)
             
             try:
-                await client.start(phone=self.phone)
+                # Connetti senza richiedere input (2FA disabilitato)
+                await client.start(phone=self.phone, force_sms=False)
                 logger.info("✅ Connesso a Telegram")
                 
                 async for message in client.iter_messages(self.source_channel_id, limit=50):
@@ -227,6 +230,8 @@ class DealWorkerUK:
         
         except Exception as e:
             logger.error(f"Errore Telethon: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
         
         return deals
 
