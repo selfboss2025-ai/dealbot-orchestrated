@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Avvia worker UK in background
-python workers/uk/worker_uk.py &
+# Avvia worker UK v2 in background
+python workers/uk/worker_uk_v2.py &
 WORKER_PID=$!
 
 # Aspetta che il worker sia pronto
