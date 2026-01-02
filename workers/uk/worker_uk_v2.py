@@ -300,17 +300,20 @@ class DealWorkerUK:
         return deals
 
     async def scrape_channel(self) -> List[Dict]:
-        """Scrape del canale - prova Telethon, fallback a niente"""
+        """Scrape del canale - prova Telethon, ritorna max 2 deals"""
         logger.info(f"🔍 Scraping canale {self.source_channel_id}...")
         
         # Prova Telethon
         deals = await self.scrape_channel_telethon()
         
         if not deals:
-            logger.warning("Nessun deal trovato - Telethon non configurato o canale vuoto")
+            logger.warning("❌ Nessun deal trovato - Telethon non configurato o canale vuoto")
+        
+        # Limita a 2 deals
+        deals = deals[:2]
         
         self.last_scrape_time = datetime.now()
-        logger.info(f"✅ Scraping completato: {len(deals)} deals trovati")
+        logger.info(f"✅ Scraping completato: {len(deals)} deals trovati (max 2)")
         
         return deals
 
