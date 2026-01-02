@@ -189,27 +189,26 @@ class DealCoordinator:
         logger.info(f"✅ Ciclo completato. {total_deals} deals processati")
     
     def start_scheduler(self):
-    """Avvia lo scheduler per esecuzione ogni 6 ore"""
-    self.scheduler.add_job(
-        self.process_deals,
-        trigger=IntervalTrigger(minutes=1),  # CAMBIATO: ogni 1 minuto per test
-        id='deal_processing',
-        name='Process Deals Every Minute',
-        replace_existing=True
-    )
-    
-    # Esecuzione immediata al primo avvio
-    self.scheduler.add_job(
-        self.process_deals,
-        trigger='date',
-        run_date=datetime.now(),
-        id='initial_run',
-        name='Initial Deal Processing'
-    )
-
+        """Avvia lo scheduler per esecuzione ogni minuto (test)"""
+        self.scheduler.add_job(
+            self.process_deals,
+            trigger=IntervalTrigger(minutes=1),
+            id='deal_processing',
+            name='Process Deals Every Minute',
+            replace_existing=True
+        )
+        
+        # Esecuzione immediata al primo avvio
+        self.scheduler.add_job(
+            self.process_deals,
+            trigger='date',
+            run_date=datetime.now(),
+            id='initial_run',
+            name='Initial Deal Processing'
+        )
         
         self.scheduler.start()
-        logger.info("📅 Scheduler avviato - processing ogni 6 ore")
+        logger.info("📅 Scheduler avviato - processing ogni 1 minuto")
     
     async def run(self):
         """Avvia il coordinatore"""
@@ -229,7 +228,7 @@ class DealCoordinator:
         # Mantieni il processo attivo
         try:
             while True:
-                await asyncio.sleep(60)  # Check ogni minuto
+                await asyncio.sleep(60)
         except KeyboardInterrupt:
             logger.info("🛑 Shutdown richiesto")
             self.scheduler.shutdown()
