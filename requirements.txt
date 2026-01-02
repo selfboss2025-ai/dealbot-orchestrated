@@ -1,0 +1,35 @@
+# Bot Coordinatore e Worker - Dipendenze Python
+
+# Telegram Bot API
+python-telegram-bot==20.7
+
+# HTTP Requests per chiamate Worker
+requests==2.31.0
+
+# Scheduling per esecuzione periodica
+APScheduler==3.10.4
+
+# Web server per Worker endpoints
+Flask==3.0.0
+
+# Parsing e regex avanzato
+beautifulsoup4==4.12.2
+lxml==4.9.3
+
+# Gestione configurazione
+python-dotenv==1.0.0
+
+# Logging avanzato
+structlog==23.2.0
+
+# Gestione date e timezone
+pytz==2023.3
+
+# HTTP client asincrono (opzionale)
+aiohttp==3.9.1
+
+# Validazione dati
+pydantic==2.5.2
+
+# Retry logic per robustezza
+tenacity==8.2.3

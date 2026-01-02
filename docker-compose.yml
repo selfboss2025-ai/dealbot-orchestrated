@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  # Bot Coordinatore Centrale (Northflk)
+  coordinator:
+    build: 
+      context: .
+      dockerfile: coordinator/Dockerfile
+    container_name: coordinator
+    environment:
+      - BOT_TOKEN=${BOT_TOKEN}
+      - UK_CHANNEL=${UK_CHANNEL}
+      - UK_CHANNEL_ID=${UK_CHANNEL_ID}
+      - WORKER_UK_URL=http://worker-uk:8001
+    restart: unless-stopped
+    depends_on:
+      - worker-uk
+    networks:
+      - dealbot-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Worker Bot UK (Northflk)
+  worker-uk:
+    build:
+      context: .
+      dockerfile: workers/uk/Dockerfile
+    container_name: worker-uk
+    environment:
+      - WORKER_BOT_TOKEN=${WORKER_BOT_TOKEN}
+      - WORKER_PORT=8001
+      - SOURCE_CHANNEL_ID=${SOURCE_CHANNEL_ID}
+      - PUBLISH_CHANNEL_ID=${PUBLISH_CHANNEL_ID}
+      - MIN_DISCOUNT_PERCENT=${MIN_DISCOUNT_PERCENT:-10}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    ports:
+      - "8001:8001"
+    restart: unless-stopped
+    networks:
+      - dealbot-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  dealbot-network:
+    driver: bridge
