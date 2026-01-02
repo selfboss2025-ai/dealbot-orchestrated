@@ -189,23 +189,23 @@ class DealCoordinator:
         logger.info(f"✅ Ciclo completato. {total_deals} deals processati")
     
     def start_scheduler(self):
-        """Avvia lo scheduler per esecuzione ogni 6 ore"""
-        self.scheduler.add_job(
-            self.process_deals,
-            trigger=IntervalTrigger(hours=6),
-            id='deal_processing',
-            name='Process Deals Every 6 Hours',
-            replace_existing=True
-        )
-        
-        # Esecuzione immediata al primo avvio
-        self.scheduler.add_job(
-            self.process_deals,
-            trigger='date',
-            run_date=datetime.now(),
-            id='initial_run',
-            name='Initial Deal Processing'
-        )
+    """Avvia lo scheduler per esecuzione ogni 6 ore"""
+    self.scheduler.add_job(
+        self.process_deals,
+        trigger=IntervalTrigger(minutes=1),  # CAMBIATO: ogni 1 minuto per test
+        id='deal_processing',
+        name='Process Deals Every Minute',
+        replace_existing=True
+    )
+    
+    # Esecuzione immediata al primo avvio
+    self.scheduler.add_job(
+        self.process_deals,
+        trigger='date',
+        run_date=datetime.now(),
+        id='initial_run',
+        name='Initial Deal Processing'
+    )
         
         self.scheduler.start()
         logger.info("📅 Scheduler avviato - processing ogni 6 ore")
