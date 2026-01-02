@@ -229,12 +229,12 @@ class DealCoordinator:
         logger.info(f"✅ Ciclo completato. {total_deals} deals processati")
     
     def start_scheduler(self):
-        """Avvia lo scheduler per esecuzione ogni minuto (test)"""
+        """Avvia lo scheduler per esecuzione ogni 10 minuti"""
         self.scheduler.add_job(
             self.process_deals,
-            trigger=IntervalTrigger(minutes=1),
+            trigger=IntervalTrigger(minutes=10),
             id='deal_processing',
-            name='Process Deals Every Minute',
+            name='Process Deals Every 10 Minutes',
             replace_existing=True
         )
         
@@ -248,7 +248,7 @@ class DealCoordinator:
         )
         
         self.scheduler.start()
-        logger.info("📅 Scheduler avviato - processing ogni 1 minuto")
+        logger.info("📅 Scheduler avviato - processing ogni 10 minuti")
     
     async def run(self):
         """Avvia il coordinatore"""
