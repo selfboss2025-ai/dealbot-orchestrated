@@ -1,9 +1,6 @@
-FROM docker:latest
+FROM python:3.11-slim
 
 WORKDIR /app
-
-# Installa docker-compose
-RUN apk add --no-cache docker-compose python3 py3-pip
 
 # Copia i file
 COPY . .
@@ -15,4 +12,4 @@ RUN pip install -r requirements.txt
 EXPOSE 8001
 
 # Comando di avvio
-CMD ["docker-compose", "up"]
+CMD ["python", "coordinator/main.py"]
