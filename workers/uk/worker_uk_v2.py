@@ -2,7 +2,7 @@
 """
 Worker UK - Deal Scout v2
 Scraper specializzato per offerte Amazon UK da @NicePriceDeals
-Usa messaggi di test e database locale per tracciare i deals
+Legge i messaggi REALI dal canale usando Telethon
 """
 
 import os
@@ -16,6 +16,8 @@ from urllib.parse import quote
 from flask import Flask, jsonify
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import TelegramError
+from telethon import TelegramClient
+from telethon.errors import SessionPasswordNeededError
 
 # Configurazione logging
 logging.basicConfig(
@@ -36,6 +38,12 @@ class DealWorkerUK:
         self.processed_asins = set()
         self.last_scrape_time = None
         self.db_file = '/tmp/worker_uk_deals.json'
+        self.last_message_id = 0
+        
+        # Telethon client
+        self.api_id = int(os.getenv('TELEGRAM_API_ID', '0'))
+        self.api_hash = os.getenv('TELEGRAM_API_HASH', '')
+        self.phone = os.getenv('TELEGRAM_PHONE', '')
         
         # Carica i deals già processati dal database
         self._load_processed_deals()
@@ -51,6 +59,7 @@ class DealWorkerUK:
                 with open(self.db_file, 'r') as f:
                     data = json.load(f)
                     self.processed_asins = set(data.get('processed_asins', []))
+                    self.last_message_id = data.get('last_message_id', 0)
                     logger.info(f"Caricati {len(self.processed_asins)} deals già processati")
         except Exception as e:
             logger.warning(f"Errore caricamento database: {e}")
@@ -61,6 +70,7 @@ class DealWorkerUK:
             with open(self.db_file, 'w') as f:
                 json.dump({
                     'processed_asins': list(self.processed_asins),
+                    'last_message_id': self.last_message_id,
                     'last_updated': datetime.now().isoformat()
                 }, f)
         except Exception as e:
@@ -92,7 +102,7 @@ class DealWorkerUK:
         logger.debug(f"ASIN non trovato in URL: {url}")
         return None
 
-    def parse_message(self, text: str, photo_url: Optional[str] = None) -> Optional[Dict]:
+    def parse_message(self, text: str) -> Optional[Dict]:
         """
         Parsa il formato specifico di NicePriceDeals:
         About £X.XX (prezzo)
@@ -129,7 +139,7 @@ class DealWorkerUK:
             else:
                 list_price_pence = current_price_pence
 
-            # Estrai URL Amazon - IMPORTANTE: prendi il primo URL
+            # Estrai URL Amazon
             url_match = re.search(r'https://www\.amazon\.co\.uk/[^\s\n]+', text)
             if not url_match:
                 logger.debug("URL Amazon non trovato")
@@ -138,7 +148,7 @@ class DealWorkerUK:
             amazon_url = url_match.group(0)
             logger.debug(f"URL trovato: {amazon_url}")
 
-            # Estrai ASIN - IMPORTANTE: valida correttamente
+            # Estrai ASIN
             asin = self.extract_asin_from_url(amazon_url)
             if not asin:
                 logger.warning(f"ASIN non estratto correttamente da: {amazon_url}")
@@ -151,7 +161,7 @@ class DealWorkerUK:
                 logger.debug(f"ASIN già processato: {asin}")
                 return None
 
-            # Estrai descrizione - cerca il testo tra il prezzo/sconto e il link
+            # Estrai descrizione
             lines = text.split('\n')
             title = None
             
@@ -160,10 +170,8 @@ class DealWorkerUK:
                 if 'amazon.co.uk' in line.lower():
                     # La descrizione è nella riga precedente
                     if i > 0:
-                        # Cerca la riga più vicina che non sia prezzo/sconto
                         for j in range(i - 1, -1, -1):
                             candidate = lines[j].strip()
-                            # Salta righe vuote, prezzo, sconto
                             if (candidate and 
                                 'About' not in candidate and 
                                 'Price drop' not in candidate and
@@ -171,7 +179,7 @@ class DealWorkerUK:
                                 '%' not in candidate and
                                 len(candidate) > 5):
                                 title = candidate
-                                logger.debug(f"Titolo trovato (riga precedente): {title}")
+                                logger.debug(f"Titolo trovato: {title}")
                                 break
                     break
             
@@ -187,7 +195,6 @@ class DealWorkerUK:
                         'Price and promotions' not in line and
                         len(line) > 10):
                         title = line
-                        logger.debug(f"Titolo trovato (ricerca): {title}")
                         break
             
             # Pulisci titolo
@@ -196,7 +203,6 @@ class DealWorkerUK:
                 title = re.sub(r'Price and promotions.*', '', title).strip()
             
             if not title or len(title) < 5:
-                logger.debug("Descrizione non trovata o troppo corta")
                 title = "Amazon Deal"
 
             logger.info(f"Titolo estratto: {title}")
@@ -208,7 +214,7 @@ class DealWorkerUK:
                 'current_price_pence': current_price_pence,
                 'list_price_pence': list_price_pence,
                 'discount_pct': discount_pct,
-                'image_url': photo_url,
+                'amazon_url': amazon_url,
                 'country': self.country,
                 'channel_id': self.source_channel_id,
                 'scraped_at': datetime.now().isoformat()
@@ -217,7 +223,7 @@ class DealWorkerUK:
             # Valida deal
             if self.validate_deal(deal):
                 self.processed_asins.add(asin)
-                self._save_processed_deals()  # Salva nel database
+                self._save_processed_deals()
                 logger.info(f"✅ Deal estratto: {asin} - £{current_price_pounds:.2f} ({discount_pct}% off) - {title}")
                 return deal
             else:
@@ -237,7 +243,7 @@ class DealWorkerUK:
                 logger.debug(f"Campo mancante: {field}")
                 return False
         
-        # Verifica ASIN format (10 caratteri alfanumerici)
+        # Verifica ASIN format
         asin = deal.get('asin', '')
         if not re.match(r'^[A-Z0-9]{10}$', asin):
             logger.debug(f"ASIN non valido: {asin}")
@@ -245,7 +251,7 @@ class DealWorkerUK:
         
         # Verifica prezzo ragionevole
         price = deal.get('current_price_pence', 0)
-        if price <= 0 or price > 10000000:  # Max £100,000
+        if price <= 0 or price > 10000000:
             logger.debug(f"Prezzo non valido: {price}")
             return False
         
@@ -258,43 +264,64 @@ class DealWorkerUK:
         
         return True
 
-    async def scrape_channel(self) -> List[Dict]:
-        """
-        Scrape del canale Telegram per deals Amazon
-        Usa messaggi di test per ora
-        """
+    async def scrape_channel_telethon(self) -> List[Dict]:
+        """Scrape usando Telethon - legge i messaggi REALI da @NicePriceDeals"""
         deals = []
         
         try:
-            logger.info(f"🔍 Scraping canale {self.source_channel_id}...")
+            if not self.api_id or self.api_id == 0:
+                logger.warning("Credenziali Telethon non configurate")
+                return deals
             
-            # Messaggi di test nel formato di NicePriceDeals
-            # NOTA: In produzione, questi verrebbero da @NicePriceDeals
-            test_messages = [
-                {
-                    'text': """About £2.49 💥 50% Price drop https://www.amazon.co.uk/dp/B0DS63GM2Z/?tag=frb-dls-21&psc=1&smid=a3p5rokl5a1ole
-Ravensburger Disney Stitch Mini Memory Game - Matching Picture Snap Pairs Game
-#ad Price and promotions are accurate at the time of posting but can change or expire at anytime""",
-                    'photo_url': 'https://m.media-amazon.com/images/I/71-qKJqKqKL._AC_SY200_.jpg'
-                },
-                {
-                    'text': """About £9.99 💥 40% Price drop https://www.amazon.co.uk/dp/B0ABCDEF12/?tag=frb-dls-21
-Sony WH-CH720 Wireless Headphones
-#ad Price and promotions are accurate at the time of posting but can change or expire at anytime""",
-                    'photo_url': 'https://m.media-amazon.com/images/I/61-qKJqKqKL._AC_SY200_.jpg'
-                },
-            ]
+            logger.info(f"🔍 Scraping REALE da @NicePriceDeals con Telethon...")
             
-            for msg in test_messages:
-                deal = self.parse_message(msg['text'], msg.get('photo_url'))
-                if deal:
-                    deals.append(deal)
+            client = TelegramClient('session_uk', self.api_id, self.api_hash)
             
-            self.last_scrape_time = datetime.now()
-            logger.info(f"✅ Scraping completato: {len(deals)} deals trovati")
-            
+            try:
+                await client.start(phone=self.phone)
+                
+                # Leggi i messaggi dal canale
+                async for message in client.iter_messages(self.source_channel_id, limit=50):
+                    try:
+                        if not message.text:
+                            continue
+                        
+                        # Aggiorna last_message_id
+                        if message.id > self.last_message_id:
+                            self.last_message_id = message.id
+                            self._save_processed_deals()
+                        
+                        # Parsa il messaggio
+                        deal = self.parse_message(message.text)
+                        if deal:
+                            deals.append(deal)
+                    
+                    except Exception as e:
+                        logger.debug(f"Errore processing messaggio: {e}")
+                        continue
+                
+                logger.info(f"✅ Scraping Telethon completato: {len(deals)} deals trovati")
+                
+            finally:
+                await client.disconnect()
+        
         except Exception as e:
-            logger.error(f"❌ Errore scraping: {e}", exc_info=True)
+            logger.error(f"❌ Errore Telethon: {e}", exc_info=True)
+        
+        return deals
+
+    async def scrape_channel(self) -> List[Dict]:
+        """Scrape del canale - prova Telethon, fallback a niente"""
+        logger.info(f"🔍 Scraping canale {self.source_channel_id}...")
+        
+        # Prova Telethon
+        deals = await self.scrape_channel_telethon()
+        
+        if not deals:
+            logger.warning("Nessun deal trovato - Telethon non configurato o canale vuoto")
+        
+        self.last_scrape_time = datetime.now()
+        logger.info(f"✅ Scraping completato: {len(deals)} deals trovati")
         
         return deals
 
@@ -343,12 +370,13 @@ Sony WH-CH720 Wireless Headphones
         
         return InlineKeyboardMarkup(keyboard)
 
-    def format_deal_message(self, deal: Dict) -> str:
-        """Formatta il messaggio del deal per Telegram"""
+    def format_deal_message(self, deal: Dict, amazon_url: str) -> str:
+        """Formatta il messaggio del deal per Telegram con link Amazon per immagine"""
         current_price_pounds = deal['current_price_pence'] / 100
         list_price_pounds = deal['list_price_pence'] / 100
         discount = deal['discount_pct']
         
+        # Includi il link Amazon nel messaggio per mostrare l'immagine
         message = f"""🔥 **DEAL ALERT** 🔥
 
 📦 {deal['title']}
@@ -359,7 +387,7 @@ Sony WH-CH720 Wireless Headphones
 🎯 **Sconto**: -{discount}%
 💾 **ASIN**: `{deal['asin']}`
 
-👇 Clicca i bottoni sotto per acquistare o condividere"""
+{amazon_url}"""
         
         return message
 
@@ -367,15 +395,17 @@ Sony WH-CH720 Wireless Headphones
         """Posta un singolo deal sul canale Telegram con bottoni"""
         try:
             affiliate_link = self.build_affiliate_link(deal['asin'])
-            message = self.format_deal_message(deal)
+            amazon_url = deal.get('amazon_url', affiliate_link)
+            message = self.format_deal_message(deal, amazon_url)
             reply_markup = self.build_sharing_buttons(deal, affiliate_link)
             
-            # Posta il messaggio con bottoni (senza foto)
+            # Posta il messaggio
             await self.bot.send_message(
                 chat_id=self.publish_channel_id,
                 text=message,
                 parse_mode='Markdown',
-                reply_markup=reply_markup
+                reply_markup=reply_markup,
+                disable_web_page_preview=False
             )
             logger.info(f"✅ Deal postato: {deal['asin']}")
             
@@ -399,7 +429,7 @@ def scrape_endpoint():
         if not worker:
             return jsonify({'error': 'Worker non inizializzato'}), 500
         
-        # Esegui scraping (sincrono per semplicità)
+        # Esegui scraping
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         deals = loop.run_until_complete(worker.scrape_channel())
