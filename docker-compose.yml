@@ -14,7 +14,8 @@ services:
       - WORKER_UK_URL=http://worker-uk:8001
     restart: unless-stopped
     depends_on:
-      - worker-uk
+      worker-uk:
+        condition: service_healthy
     networks:
       - dealbot-network
     logging:
@@ -49,6 +50,12 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
 networks:
   dealbot-network:
