@@ -357,7 +357,9 @@ Sony WH-CH720 Wireless Headphones
 ~~£{list_price_pounds:.2f}~~
 
 🎯 **Sconto**: -{discount}%
-💾 **ASIN**: `{deal['asin']}`"""
+💾 **ASIN**: `{deal['asin']}`
+
+👇 Clicca i bottoni sotto per acquistare o condividere"""
         
         return message
 
@@ -368,34 +370,14 @@ Sony WH-CH720 Wireless Headphones
             message = self.format_deal_message(deal)
             reply_markup = self.build_sharing_buttons(deal, affiliate_link)
             
-            # Posta con immagine se disponibile
-            if deal.get('image_url'):
-                try:
-                    await self.bot.send_photo(
-                        chat_id=self.publish_channel_id,
-                        photo=deal['image_url'],
-                        caption=message,
-                        parse_mode='Markdown',
-                        reply_markup=reply_markup
-                    )
-                    logger.info(f"✅ Deal postato con foto: {deal['asin']}")
-                except Exception as e:
-                    logger.warning(f"Errore invio foto, provo senza: {e}")
-                    await self.bot.send_message(
-                        chat_id=self.publish_channel_id,
-                        text=message,
-                        parse_mode='Markdown',
-                        reply_markup=reply_markup
-                    )
-                    logger.info(f"✅ Deal postato senza foto: {deal['asin']}")
-            else:
-                await self.bot.send_message(
-                    chat_id=self.publish_channel_id,
-                    text=message,
-                    parse_mode='Markdown',
-                    reply_markup=reply_markup
-                )
-                logger.info(f"✅ Deal postato (no image): {deal['asin']}")
+            # Posta il messaggio con bottoni (senza foto)
+            await self.bot.send_message(
+                chat_id=self.publish_channel_id,
+                text=message,
+                parse_mode='Markdown',
+                reply_markup=reply_markup
+            )
+            logger.info(f"✅ Deal postato: {deal['asin']}")
             
             return True
             
