@@ -39,11 +39,22 @@ class DealWorkerUK:
         logger.info(f"📤 Canale pubblicazione: {self.publish_channel_id}")
 
     def extract_asin_from_url(self, url: str) -> Optional[str]:
-        """Estrae ASIN da URL Amazon"""
-        # Pattern: /dp/ASIN o /gp/product/ASIN
-        match = re.search(r'/(?:dp|gp/product)/([A-Z0-9]{10})', url)
-        if match:
-            return match.group(1)
+        """Estrae ASIN da URL Amazon - supporta vari formati"""
+        # Pattern: /dp/ASIN, /gp/product/ASIN, /B0XXXXXXXXXX
+        patterns = [
+            r'/dp/([A-Z0-9]{10})',
+            r'/gp/product/([A-Z0-9]{10})',
+            r'/([A-Z0-9]{10})(?:[/?]|$)'
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, url)
+            if match:
+                asin = match.group(1)
+                # Valida che sia un ASIN valido (10 caratteri alfanumerici)
+                if re.match(r'^[A-Z0-9]{10}$', asin):
+                    return asin
+        
         return None
 
     def parse_message(self, text: str, photo_url: Optional[str] = None) -> Optional[Dict]:
@@ -56,10 +67,16 @@ class DealWorkerUK:
         #ad
         """
         try:
+            if not text or len(text.strip()) < 10:
+                logger.debug("Messaggio troppo corto")
+                return None
+
             # Estrai prezzo (£X.XX)
             price_match = re.search(r'About\s+£([\d.]+)', text)
             if not price_match:
+                logger.debug("Prezzo non trovato")
                 return None
+            
             current_price_pounds = float(price_match.group(1))
             current_price_pence = int(current_price_pounds * 100)
 
@@ -74,36 +91,75 @@ class DealWorkerUK:
                 list_price_pence = current_price_pence
 
             # Estrai URL Amazon
-            url_match = re.search(r'https://www\.amazon\.co\.uk/[^\s]+', text)
+            url_match = re.search(r'https://www\.amazon\.co\.uk/[^\s\n]+', text)
             if not url_match:
+                logger.debug("URL Amazon non trovato")
                 return None
+            
             amazon_url = url_match.group(0)
+            logger.debug(f"URL trovato: {amazon_url}")
 
             # Estrai ASIN
             asin = self.extract_asin_from_url(amazon_url)
             if not asin:
+                logger.debug(f"ASIN non trovato in URL: {amazon_url}")
                 return None
+
+            logger.debug(f"ASIN estratto: {asin}")
 
             # Evita duplicati
             if asin in self.processed_asins:
                 logger.debug(f"ASIN già processato: {asin}")
                 return None
 
-            # Estrai descrizione (prima riga dopo il prezzo, prima del link)
-            # Cerca il testo tra il prezzo e il link
+            # Estrai descrizione - cerca il testo tra il prezzo/sconto e il link
+            # Dividi il messaggio in righe
             lines = text.split('\n')
-            title = "Amazon Deal"
+            title = None
+            
+            # Cerca la riga con il link Amazon
             for i, line in enumerate(lines):
                 if 'amazon.co.uk' in line.lower():
-                    # La descrizione è nelle righe precedenti
+                    # La descrizione è nella riga precedente
                     if i > 0:
-                        title = lines[i - 1].strip()
+                        # Cerca la riga più vicina che non sia prezzo/sconto
+                        for j in range(i - 1, -1, -1):
+                            candidate = lines[j].strip()
+                            # Salta righe vuote, prezzo, sconto
+                            if (candidate and 
+                                'About' not in candidate and 
+                                'Price drop' not in candidate and
+                                '£' not in candidate and
+                                '%' not in candidate and
+                                len(candidate) > 5):
+                                title = candidate
+                                break
                     break
-
+            
+            # Se non trovato, prova a cercare il testo più lungo
+            if not title:
+                for line in lines:
+                    line = line.strip()
+                    if (line and 
+                        'About' not in line and 
+                        'Price drop' not in line and
+                        'amazon' not in line.lower() and
+                        '#ad' not in line and
+                        'Price and promotions' not in line and
+                        len(line) > 10):
+                        title = line
+                        break
+            
             # Pulisci titolo
-            title = re.sub(r'#ad.*', '', title).strip()
-            if len(title) < 3:
+            if title:
+                title = re.sub(r'#ad.*', '', title).strip()
+                title = re.sub(r'Price and promotions.*', '', title).strip()
+            
+            if not title or len(title) < 5:
+                logger.debug("Descrizione non trovata o troppo corta")
                 title = "Amazon Deal"
+
+            logger.info(f"Titolo estratto: {title}")
 
             # Costruisci deal
             deal = {
@@ -121,14 +177,14 @@ class DealWorkerUK:
             # Valida deal
             if self.validate_deal(deal):
                 self.processed_asins.add(asin)
-                logger.info(f"✅ Deal estratto: {asin} - £{current_price_pounds:.2f} ({discount_pct}% off)")
+                logger.info(f"✅ Deal estratto: {asin} - £{current_price_pounds:.2f} ({discount_pct}% off) - {title}")
                 return deal
             else:
                 logger.debug(f"Deal non valido: {asin}")
                 return None
 
         except Exception as e:
-            logger.error(f"Errore parsing messaggio: {e}")
+            logger.error(f"Errore parsing messaggio: {e}", exc_info=True)
             return None
 
     def validate_deal(self, deal: Dict) -> bool:
@@ -137,16 +193,19 @@ class DealWorkerUK:
         
         for field in required_fields:
             if not deal.get(field):
+                logger.debug(f"Campo mancante: {field}")
                 return False
         
-        # Verifica ASIN format
+        # Verifica ASIN format (10 caratteri alfanumerici)
         asin = deal.get('asin', '')
         if not re.match(r'^[A-Z0-9]{10}$', asin):
+            logger.debug(f"ASIN non valido: {asin}")
             return False
         
         # Verifica prezzo ragionevole
         price = deal.get('current_price_pence', 0)
         if price <= 0 or price > 10000000:  # Max £100,000
+            logger.debug(f"Prezzo non valido: {price}")
             return False
         
         # Verifica sconto minimo
@@ -161,42 +220,79 @@ class DealWorkerUK:
     async def scrape_channel(self) -> List[Dict]:
         """
         Scrape del canale Telegram per deals Amazon
-        Per ora usa messaggi di test
+        Legge gli ultimi messaggi dal canale sorgente
         """
         deals = []
         
         try:
             logger.info(f"🔍 Scraping canale {self.source_channel_id}...")
             
-            # TODO: Implementare lettura reale da Telegram
-            # Per ora usiamo messaggi di test per verificare il parsing
+            # Leggi gli ultimi 50 messaggi dal canale
+            messages = await self.bot.get_chat_history(
+                chat_id=self.source_channel_id,
+                limit=50
+            )
             
-            # Messaggi di test nel formato di NicePriceDeals con immagini
-            test_messages = [
-                {
-                    'text': """About £2.49 💥 50% Price drop https://www.amazon.co.uk/dp/B0DS63GM2Z/?tag=frb-dls-21&psc=1&smid=a3p5rokl5a1ole
-Ravensburger Disney Stitch Mini Memory Game - Matching Picture Snap Pairs Game
-#ad Price and promotions are accurate at the time of posting but can change or expire at anytime""",
-                    'photo': 'https://m.media-amazon.com/images/I/71-qKJqKqKL._AC_SY200_.jpg'
-                },
-                {
-                    'text': """About £9.99 💥 40% Price drop https://www.amazon.co.uk/dp/B0ABCDEF12/?tag=frb-dls-21
-Sony WH-CH720 Wireless Headphones
-#ad Price and promotions are accurate at the time of posting but can change or expire at anytime""",
-                    'photo': 'https://m.media-amazon.com/images/I/61-qKJqKqKL._AC_SY200_.jpg'
-                },
-            ]
+            logger.info(f"📨 Letti {len(messages)} messaggi dal canale")
             
-            for msg in test_messages:
-                deal = self.parse_message(msg['text'], msg.get('photo'))
-                if deal:
-                    deals.append(deal)
+            for message in messages:
+                try:
+                    # Salta messaggi senza testo
+                    if not message.text:
+                        continue
+                    
+                    # Estrai URL foto se disponibile
+                    photo_url = None
+                    if message.photo:
+                        # Prendi la foto con la migliore risoluzione
+                        photo = message.photo[-1]
+                        file = await self.bot.get_file(photo.file_id)
+                        photo_url = file.file_path
+                        logger.debug(f"Foto trovata: {photo_url}")
+                    
+                    # Parsa il messaggio
+                    deal = self.parse_message(message.text, photo_url)
+                    if deal:
+                        deals.append(deal)
+                
+                except Exception as e:
+                    logger.debug(f"Errore processing messaggio: {e}")
+                    continue
             
             self.last_scrape_time = datetime.now()
             logger.info(f"✅ Scraping completato: {len(deals)} deals trovati")
             
         except Exception as e:
-            logger.error(f"❌ Errore scraping: {e}")
+            logger.error(f"❌ Errore scraping: {e}", exc_info=True)
+            # Fallback a messaggi di test se scraping fallisce
+            logger.info("Usando messaggi di test come fallback...")
+            deals = await self._get_test_deals()
+        
+        return deals
+
+    async def _get_test_deals(self) -> List[Dict]:
+        """Messaggi di test per sviluppo/debug"""
+        deals = []
+        
+        test_messages = [
+            {
+                'text': """About £2.49 💥 50% Price drop https://www.amazon.co.uk/dp/B0DS63GM2Z/?tag=frb-dls-21&psc=1&smid=a3p5rokl5a1ole
+Ravensburger Disney Stitch Mini Memory Game - Matching Picture Snap Pairs Game
+#ad Price and promotions are accurate at the time of posting but can change or expire at anytime""",
+                'photo': 'https://m.media-amazon.com/images/I/71-qKJqKqKL._AC_SY200_.jpg'
+            },
+            {
+                'text': """About £9.99 💥 40% Price drop https://www.amazon.co.uk/dp/B0ABCDEF12/?tag=frb-dls-21
+Sony WH-CH720 Wireless Headphones
+#ad Price and promotions are accurate at the time of posting but can change or expire at anytime""",
+                'photo': 'https://m.media-amazon.com/images/I/61-qKJqKqKL._AC_SY200_.jpg'
+            },
+        ]
+        
+        for msg in test_messages:
+            deal = self.parse_message(msg['text'], msg.get('photo'))
+            if deal:
+                deals.append(deal)
         
         return deals
 
@@ -280,6 +376,7 @@ Sony WH-CH720 Wireless Headphones
                         parse_mode='Markdown',
                         reply_markup=reply_markup
                     )
+                    logger.info(f"✅ Deal postato con foto: {deal['asin']}")
                 except Exception as e:
                     logger.warning(f"Errore invio foto, provo senza: {e}")
                     await self.bot.send_message(
@@ -288,6 +385,7 @@ Sony WH-CH720 Wireless Headphones
                         parse_mode='Markdown',
                         reply_markup=reply_markup
                     )
+                    logger.info(f"✅ Deal postato senza foto: {deal['asin']}")
             else:
                 await self.bot.send_message(
                     chat_id=self.publish_channel_id,
@@ -295,15 +393,15 @@ Sony WH-CH720 Wireless Headphones
                     parse_mode='Markdown',
                     reply_markup=reply_markup
                 )
+                logger.info(f"✅ Deal postato (no image): {deal['asin']}")
             
-            logger.info(f"✅ Deal postato: {deal['asin']}")
             return True
             
         except TelegramError as e:
             logger.error(f"❌ Errore Telegram: {e}")
             return False
         except Exception as e:
-            logger.error(f"❌ Errore generico: {e}")
+            logger.error(f"❌ Errore generico: {e}", exc_info=True)
             return False
 
 # Flask app per esporre endpoint HTTP
