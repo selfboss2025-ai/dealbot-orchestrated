@@ -10,7 +10,8 @@ import asyncio
 import requests
 from datetime import datetime
 from typing import List, Dict, Optional
-from telegram import Bot
+from urllib.parse import quote
+from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import TelegramError
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
@@ -87,6 +88,47 @@ class DealCoordinator:
         domain = domain_map.get(country, 'amazon.com')
         return f"https://{domain}/dp/{asin}?tag={affiliate_tag}"
     
+    def build_sharing_buttons(self, deal: Dict, affiliate_link: str) -> InlineKeyboardMarkup:
+        """Costruisce i bottoni di sharing per social media"""
+        
+        # Testo per il sharing
+        share_text = f"🔥 {deal['title']}\n💰 £{deal['current_price_pence']/100:.2f} ({deal['discount_pct']}% off)\n🛒 {affiliate_link}"
+        share_text_encoded = quote(share_text)
+        
+        # Bottoni
+        keyboard = [
+            [
+                # Bottone Amazon
+                InlineKeyboardButton(
+                    "🛒 VIEW ON AMAZON",
+                    url=affiliate_link
+                )
+            ],
+            [
+                # Bottoni sharing
+                InlineKeyboardButton(
+                    "💬 WhatsApp",
+                    url=f"https://wa.me/?text={share_text_encoded}"
+                ),
+                InlineKeyboardButton(
+                    "👍 Facebook",
+                    url=f"https://www.facebook.com/sharer/sharer.php?u={quote(affiliate_link)}"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "𝕏 Twitter",
+                    url=f"https://twitter.com/intent/tweet?text={share_text_encoded}&url={quote(affiliate_link)}"
+                ),
+                InlineKeyboardButton(
+                    "✈️ Telegram",
+                    url=f"https://t.me/share/url?url={quote(affiliate_link)}&text={share_text_encoded}"
+                )
+            ]
+        ]
+        
+        return InlineKeyboardMarkup(keyboard)
+    
     def format_deal_message(self, deal: Dict, affiliate_link: str) -> str:
         """Formatta il messaggio del deal per Telegram"""
         discount = deal.get('discount_pct', 0)
@@ -103,16 +145,12 @@ class DealCoordinator:
 ~~{currency}{list_price:.2f}~~
 
 🎯 **Sconto**: -{discount}%
-💾 **ASIN**: {deal['asin']}
-
-🛒 [**ACQUISTA ORA**]({affiliate_link})
-
-#Amazon{deal['country']} #Deal #Sconto"""
+💾 **ASIN**: {deal['asin']}"""
         
         return message
     
     async def post_deal(self, deal: Dict, worker_config: Dict):
-        """Posta un singolo deal sul canale Telegram"""
+        """Posta un singolo deal sul canale Telegram con bottoni"""
         try:
             affiliate_link = self.build_affiliate_link(
                 deal['asin'], 
@@ -121,6 +159,7 @@ class DealCoordinator:
             )
             
             message = self.format_deal_message(deal, affiliate_link)
+            reply_markup = self.build_sharing_buttons(deal, affiliate_link)
             
             # Usa channel_id se disponibile, altrimenti channel name
             chat_id = worker_config.get('channel_id') or worker_config['channel']
@@ -132,7 +171,8 @@ class DealCoordinator:
                         chat_id=chat_id,
                         photo=deal['image_url'],
                         caption=message,
-                        parse_mode='Markdown'
+                        parse_mode='Markdown',
+                        reply_markup=reply_markup
                     )
                 except Exception as e:
                     logger.warning(f"Errore invio foto, provo senza: {e}")
@@ -140,14 +180,14 @@ class DealCoordinator:
                         chat_id=chat_id,
                         text=message,
                         parse_mode='Markdown',
-                        disable_web_page_preview=False
+                        reply_markup=reply_markup
                     )
             else:
                 await self.bot.send_message(
                     chat_id=chat_id,
                     text=message,
                     parse_mode='Markdown',
-                    disable_web_page_preview=False
+                    reply_markup=reply_markup
                 )
                 
             logger.info(f"Deal postato: {deal['asin']} su {worker_config['channel']}")
