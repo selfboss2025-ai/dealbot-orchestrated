@@ -2,13 +2,14 @@
 """
 Worker UK - Deal Scout v2
 Scraper specializzato per offerte Amazon UK da @NicePriceDeals
-Legge i messaggi reali dal canale
+Usa messaggi di test e database locale per tracciare i deals
 """
 
 import os
 import re
 import logging
 import asyncio
+import json
 from typing import List, Dict, Optional
 from datetime import datetime
 from urllib.parse import quote
@@ -34,11 +35,36 @@ class DealWorkerUK:
         self.bot = Bot(token=self.bot_token)
         self.processed_asins = set()
         self.last_scrape_time = None
-        self.last_message_id = 0  # Traccia l'ultimo messaggio letto
+        self.db_file = '/tmp/worker_uk_deals.json'
+        
+        # Carica i deals già processati dal database
+        self._load_processed_deals()
         
         logger.info(f"🤖 Worker UK v2 inizializzato")
         logger.info(f"📺 Canale sorgente: {self.source_channel_id}")
         logger.info(f"📤 Canale pubblicazione: {self.publish_channel_id}")
+
+    def _load_processed_deals(self):
+        """Carica i deals già processati dal database locale"""
+        try:
+            if os.path.exists(self.db_file):
+                with open(self.db_file, 'r') as f:
+                    data = json.load(f)
+                    self.processed_asins = set(data.get('processed_asins', []))
+                    logger.info(f"Caricati {len(self.processed_asins)} deals già processati")
+        except Exception as e:
+            logger.warning(f"Errore caricamento database: {e}")
+
+    def _save_processed_deals(self):
+        """Salva i deals processati nel database locale"""
+        try:
+            with open(self.db_file, 'w') as f:
+                json.dump({
+                    'processed_asins': list(self.processed_asins),
+                    'last_updated': datetime.now().isoformat()
+                }, f)
+        except Exception as e:
+            logger.warning(f"Errore salvataggio database: {e}")
 
     def extract_asin_from_url(self, url: str) -> Optional[str]:
         """Estrae ASIN da URL Amazon - supporta vari formati"""
@@ -66,7 +92,7 @@ class DealWorkerUK:
         logger.debug(f"ASIN non trovato in URL: {url}")
         return None
 
-    def parse_message(self, text: str, photo_file_id: Optional[str] = None) -> Optional[Dict]:
+    def parse_message(self, text: str, photo_url: Optional[str] = None) -> Optional[Dict]:
         """
         Parsa il formato specifico di NicePriceDeals:
         About £X.XX (prezzo)
@@ -182,7 +208,7 @@ class DealWorkerUK:
                 'current_price_pence': current_price_pence,
                 'list_price_pence': list_price_pence,
                 'discount_pct': discount_pct,
-                'photo_file_id': photo_file_id,
+                'image_url': photo_url,
                 'country': self.country,
                 'channel_id': self.source_channel_id,
                 'scraped_at': datetime.now().isoformat()
@@ -191,6 +217,7 @@ class DealWorkerUK:
             # Valida deal
             if self.validate_deal(deal):
                 self.processed_asins.add(asin)
+                self._save_processed_deals()  # Salva nel database
                 logger.info(f"✅ Deal estratto: {asin} - £{current_price_pounds:.2f} ({discount_pct}% off) - {title}")
                 return deal
             else:
@@ -234,90 +261,40 @@ class DealWorkerUK:
     async def scrape_channel(self) -> List[Dict]:
         """
         Scrape del canale Telegram per deals Amazon
-        Legge i messaggi reali dal canale @NicePriceDeals
+        Usa messaggi di test per ora
         """
         deals = []
         
         try:
             logger.info(f"🔍 Scraping canale {self.source_channel_id}...")
             
-            # Leggi gli ultimi 100 messaggi dal canale
-            # Usa offset_id per leggere solo i nuovi messaggi
-            try:
-                messages = await self.bot.get_chat_history(
-                    chat_id=self.source_channel_id,
-                    limit=100,
-                    offset_id=self.last_message_id
-                )
-                
-                logger.info(f"📨 Letti {len(messages)} messaggi dal canale")
-                
-                for message in messages:
-                    try:
-                        # Aggiorna l'ultimo message_id
-                        if message.message_id > self.last_message_id:
-                            self.last_message_id = message.message_id
-                        
-                        # Salta messaggi senza testo
-                        if not message.text:
-                            logger.debug("Messaggio senza testo, skipped")
-                            continue
-                        
-                        # Estrai photo_file_id se disponibile
-                        photo_file_id = None
-                        if message.photo:
-                            # Prendi la foto con la migliore risoluzione
-                            photo = message.photo[-1]
-                            photo_file_id = photo.file_id
-                            logger.info(f"📸 Foto trovata: {photo_file_id[:20]}...")
-                        
-                        # Parsa il messaggio
-                        deal = self.parse_message(message.text, photo_file_id)
-                        if deal:
-                            deals.append(deal)
-                    
-                    except Exception as e:
-                        logger.debug(f"Errore processing messaggio: {e}")
-                        continue
-                
-                self.last_scrape_time = datetime.now()
-                logger.info(f"✅ Scraping completato: {len(deals)} deals trovati")
-                
-            except AttributeError as e:
-                logger.warning(f"get_chat_history non disponibile: {e}")
-                logger.info("Usando fallback a messaggi di test...")
-                deals = await self._get_test_deals()
+            # Messaggi di test nel formato di NicePriceDeals
+            # NOTA: In produzione, questi verrebbero da @NicePriceDeals
+            test_messages = [
+                {
+                    'text': """About £2.49 💥 50% Price drop https://www.amazon.co.uk/dp/B0DS63GM2Z/?tag=frb-dls-21&psc=1&smid=a3p5rokl5a1ole
+Ravensburger Disney Stitch Mini Memory Game - Matching Picture Snap Pairs Game
+#ad Price and promotions are accurate at the time of posting but can change or expire at anytime""",
+                    'photo_url': 'https://m.media-amazon.com/images/I/71-qKJqKqKL._AC_SY200_.jpg'
+                },
+                {
+                    'text': """About £9.99 💥 40% Price drop https://www.amazon.co.uk/dp/B0ABCDEF12/?tag=frb-dls-21
+Sony WH-CH720 Wireless Headphones
+#ad Price and promotions are accurate at the time of posting but can change or expire at anytime""",
+                    'photo_url': 'https://m.media-amazon.com/images/I/61-qKJqKqKL._AC_SY200_.jpg'
+                },
+            ]
+            
+            for msg in test_messages:
+                deal = self.parse_message(msg['text'], msg.get('photo_url'))
+                if deal:
+                    deals.append(deal)
+            
+            self.last_scrape_time = datetime.now()
+            logger.info(f"✅ Scraping completato: {len(deals)} deals trovati")
             
         except Exception as e:
             logger.error(f"❌ Errore scraping: {e}", exc_info=True)
-            logger.info("Usando fallback a messaggi di test...")
-            deals = await self._get_test_deals()
-        
-        return deals
-
-    async def _get_test_deals(self) -> List[Dict]:
-        """Messaggi di test per sviluppo/debug"""
-        deals = []
-        
-        test_messages = [
-            {
-                'text': """About £2.49 💥 50% Price drop https://www.amazon.co.uk/dp/B0DS63GM2Z/?tag=frb-dls-21&psc=1&smid=a3p5rokl5a1ole
-Ravensburger Disney Stitch Mini Memory Game - Matching Picture Snap Pairs Game
-#ad Price and promotions are accurate at the time of posting but can change or expire at anytime""",
-                'photo_file_id': None
-            },
-            {
-                'text': """About £9.99 💥 40% Price drop https://www.amazon.co.uk/dp/B0ABCDEF12/?tag=frb-dls-21
-Sony WH-CH720 Wireless Headphones
-#ad Price and promotions are accurate at the time of posting but can change or expire at anytime""",
-                'photo_file_id': None
-            },
-        ]
-        
-        for msg in test_messages:
-            deal = self.parse_message(msg['text'], msg.get('photo_file_id'))
-            if deal:
-                deals.append(deal)
         
         return deals
 
@@ -392,11 +369,11 @@ Sony WH-CH720 Wireless Headphones
             reply_markup = self.build_sharing_buttons(deal, affiliate_link)
             
             # Posta con immagine se disponibile
-            if deal.get('photo_file_id'):
+            if deal.get('image_url'):
                 try:
                     await self.bot.send_photo(
                         chat_id=self.publish_channel_id,
-                        photo=deal['photo_file_id'],
+                        photo=deal['image_url'],
                         caption=message,
                         parse_mode='Markdown',
                         reply_markup=reply_markup
@@ -462,6 +439,7 @@ def health_check():
         'country': worker.country if worker else 'unknown',
         'source_channel': worker.source_channel_id if worker else 'unknown',
         'publish_channel': worker.publish_channel_id if worker else 'unknown',
+        'processed_deals': len(worker.processed_asins) if worker else 0,
         'last_scrape': worker.last_scrape_time.isoformat() if worker and worker.last_scrape_time else None,
         'timestamp': datetime.now().isoformat()
     })
