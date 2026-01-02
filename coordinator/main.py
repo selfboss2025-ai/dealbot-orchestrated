@@ -32,13 +32,15 @@ class DealCoordinator:
         self.workers = {}
         
         # Worker UK
-        if os.getenv('WORKER_UK_URL'):
+        worker_uk_url = os.getenv('WORKER_UK_URL', 'http://worker-uk:8001')
+        if worker_uk_url:
             self.workers['UK'] = {
-                'url': os.getenv('WORKER_UK_URL'),
+                'url': worker_uk_url,
                 'channel': os.getenv('UK_CHANNEL', '@DealScoutUKBot'),
-                'channel_id': os.getenv('UK_CHANNEL_ID', -1001232723285),
+                'channel_id': int(os.getenv('UK_CHANNEL_ID', -1001232723285)),
                 'affiliate_tag': 'ukbestdeal02-21'
             }
+            logger.info(f"Worker UK configurato: {worker_uk_url}")
         
         # Worker IT (opzionale)
         if os.getenv('WORKER_IT_URL'):
