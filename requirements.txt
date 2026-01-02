@@ -3,6 +3,9 @@
 # Telegram Bot API
 python-telegram-bot==20.7
 
+# Telegram Client API (per scraping messaggi)
+telethon==1.33.5
+
 # HTTP Requests per chiamate Worker
 requests==2.31.0
 
