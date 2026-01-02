@@ -202,6 +202,7 @@ class DealWorkerUK:
                 return deals
             
             logger.info("🔍 Scraping con Telethon...")
+            logger.info(f"API ID: {self.api_id}, Phone: {self.phone}")
             
             # Usa session_uk in /tmp per evitare problemi di permessi in Docker
             session_path = '/tmp/session_uk'
@@ -209,12 +210,19 @@ class DealWorkerUK:
             
             try:
                 # Connetti senza richiedere input (2FA disabilitato)
+                logger.info("Tentativo connessione Telethon...")
                 await client.start(phone=self.phone, force_sms=False)
                 logger.info("✅ Connesso a Telegram")
                 
+                logger.info(f"Lettura messaggi da canale {self.source_channel_id}...")
+                message_count = 0
                 async for message in client.iter_messages(self.source_channel_id, limit=50):
+                    message_count += 1
                     if not message.text:
+                        logger.debug(f"Messaggio {message.id} senza testo")
                         continue
+                    
+                    logger.debug(f"Messaggio {message.id}: {message.text[:50]}...")
                     
                     if message.id > self.last_message_id:
                         self.last_message_id = message.id
@@ -222,8 +230,9 @@ class DealWorkerUK:
                     deal = self.parse_message(message.text)
                     if deal:
                         deals.append(deal)
+                        logger.info(f"✅ Deal trovato: {deal['asin']}")
                 
-                logger.info(f"✅ Telethon: {len(deals)} deals trovati")
+                logger.info(f"✅ Telethon: {message_count} messaggi letti, {len(deals)} deals trovati")
                 
             finally:
                 await client.disconnect()
