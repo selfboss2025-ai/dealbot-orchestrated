@@ -206,6 +206,7 @@ class DealCoordinator:
         id='initial_run',
         name='Initial Deal Processing'
     )
+
         
         self.scheduler.start()
         logger.info("📅 Scheduler avviato - processing ogni 6 ore")
