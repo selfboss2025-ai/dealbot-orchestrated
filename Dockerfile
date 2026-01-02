@@ -8,8 +8,12 @@ COPY . .
 # Installa dipendenze Python
 RUN pip install -r requirements.txt
 
+# Rendi eseguibile lo script di avvio
+RUN chmod +x start.sh
+
 # Esponi porte
 EXPOSE 8001
 
 # Comando di avvio
-CMD ["python", "coordinator/main.py"]
+CMD ["./start.sh"]
+
