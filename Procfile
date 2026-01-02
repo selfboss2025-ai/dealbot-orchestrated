@@ -1,5 +1,3 @@
-cd /Users/tuonome/dealbot-orchestrated
+web: python coordinator/main.py
+worker: python workers/uk/worker_uk.py
 
-git add Procfile
-git commit -m "Add Procfile for Northflk"
-git push
