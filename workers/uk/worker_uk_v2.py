@@ -270,21 +270,34 @@ class DealWorkerUK:
         
         try:
             if not self.api_id or self.api_id == 0:
-                logger.warning("Credenziali Telethon non configurate")
+                logger.warning("❌ Credenziali Telethon non configurate (API_ID = 0)")
                 return deals
             
             logger.info(f"🔍 Scraping REALE da @NicePriceDeals con Telethon...")
+            logger.info(f"API_ID: {self.api_id}")
+            logger.info(f"API_HASH: {self.api_hash[:10]}...")
+            logger.info(f"PHONE: {self.phone}")
             
             client = TelegramClient('session_uk', self.api_id, self.api_hash)
             
             try:
+                logger.info("🔗 Connessione a Telegram...")
                 await client.start(phone=self.phone)
+                logger.info("✅ Connesso a Telegram")
+                
+                logger.info(f"📖 Lettura messaggi da canale {self.source_channel_id}...")
                 
                 # Leggi i messaggi dal canale
+                message_count = 0
                 async for message in client.iter_messages(self.source_channel_id, limit=50):
                     try:
+                        message_count += 1
+                        
                         if not message.text:
+                            logger.debug(f"Messaggio {message.id}: nessun testo")
                             continue
+                        
+                        logger.debug(f"Messaggio {message.id}: {message.text[:50]}...")
                         
                         # Aggiorna last_message_id
                         if message.id > self.last_message_id:
@@ -295,15 +308,21 @@ class DealWorkerUK:
                         deal = self.parse_message(message.text)
                         if deal:
                             deals.append(deal)
+                            logger.info(f"✅ Deal trovato: {deal['asin']}")
                     
                     except Exception as e:
-                        logger.debug(f"Errore processing messaggio: {e}")
+                        logger.debug(f"Errore processing messaggio {message.id}: {e}")
                         continue
                 
-                logger.info(f"✅ Scraping Telethon completato: {len(deals)} deals trovati")
+                logger.info(f"✅ Letti {message_count} messaggi, {len(deals)} deals trovati")
                 
+            except Exception as e:
+                logger.error(f"❌ Errore durante lettura messaggi: {e}", exc_info=True)
+            
             finally:
+                logger.info("🔌 Disconnessione da Telegram...")
                 await client.disconnect()
+                logger.info("✅ Disconnesso")
         
         except Exception as e:
             logger.error(f"❌ Errore Telethon: {e}", exc_info=True)
