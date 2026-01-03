@@ -120,37 +120,20 @@ class DealWorkerUK:
         return None
 
     def parse_message(self, text: str) -> Optional[Dict]:
-        """Parsa il formato di NicePriceDeals"""
+        """Copia il messaggio e sostituisce solo il tag affiliato"""
         try:
             if not text or len(text.strip()) < 10:
                 return None
 
-            # Estrai prezzo
-            price_match = re.search(r'About\s+£([\d.]+)', text)
-            if not price_match:
-                return None
-            
-            current_price_pounds = float(price_match.group(1))
-            current_price_pence = int(current_price_pounds * 100)
-
-            # Estrai sconto
-            discount_match = re.search(r'(\d+)%\s+Price drop', text)
-            discount_pct = int(discount_match.group(1)) if discount_match else 0
-
-            if discount_pct > 0:
-                list_price_pence = int(current_price_pence / (1 - discount_pct / 100))
-            else:
-                list_price_pence = current_price_pence
-
-            # Estrai URL Amazon
+            # Cerca URL Amazon
             url_match = re.search(r'https://www\.amazon\.co\.uk/[^\s\n]+', text)
             if not url_match:
                 return None
             
-            amazon_url = url_match.group(0)
-
+            original_url = url_match.group(0)
+            
             # Estrai ASIN
-            asin = self.extract_asin_from_url(amazon_url)
+            asin = self.extract_asin_from_url(original_url)
             if not asin:
                 return None
 
@@ -158,90 +141,37 @@ class DealWorkerUK:
             if asin in self.processed_asins:
                 return None
 
-            # Estrai descrizione
-            lines = text.split('\n')
-            title = None
+            # Sostituisci il tag affiliato nell'URL
+            # Rimuovi il vecchio tag e aggiungi il nostro
+            new_url = re.sub(r'[?&]tag=[^&\s]+', '', original_url)
+            if '?' in new_url:
+                new_url = f"{new_url}&tag={self.affiliate_tag}"
+            else:
+                new_url = f"{new_url}?tag={self.affiliate_tag}"
             
-            for i, line in enumerate(lines):
-                if 'amazon.co.uk' in line.lower():
-                    if i > 0:
-                        for j in range(i - 1, -1, -1):
-                            candidate = lines[j].strip()
-                            if (candidate and 
-                                'About' not in candidate and 
-                                'Price drop' not in candidate and
-                                '£' not in candidate and
-                                '%' not in candidate and
-                                len(candidate) > 5):
-                                title = candidate
-                                break
-                    break
-            
-            if not title:
-                for line in lines:
-                    line = line.strip()
-                    if (line and 
-                        'About' not in line and 
-                        'Price drop' not in line and
-                        'amazon' not in line.lower() and
-                        '#ad' not in line and
-                        'Price and promotions' not in line and
-                        len(line) > 10):
-                        title = line
-                        break
-            
-            if title:
-                title = re.sub(r'#ad.*', '', title).strip()
-                title = re.sub(r'Price and promotions.*', '', title).strip()
-            
-            if not title or len(title) < 5:
-                title = "Amazon Deal"
+            # Sostituisci l'URL nel testo
+            new_text = text.replace(original_url, new_url)
 
-            # Costruisci deal
+            # Costruisci deal con il messaggio completo
             deal = {
                 'asin': asin,
-                'title': title,
-                'current_price_pence': current_price_pence,
-                'list_price_pence': list_price_pence,
-                'discount_pct': discount_pct,
-                'amazon_url': amazon_url,
+                'message_text': new_text,
+                'original_url': original_url,
+                'affiliate_url': new_url,
                 'country': self.country,
-                'channel_id': self.source_channel_id,
                 'scraped_at': datetime.now().isoformat()
             }
 
-            if self.validate_deal(deal):
-                self.processed_asins.add(asin)
-                logger.info(f"✅ Deal estratto: {asin} - £{current_price_pounds:.2f} ({discount_pct}% off)")
-                return deal
+            self.processed_asins.add(asin)
+            logger.info(f"✅ Messaggio copiato: {asin}")
+            return deal
 
         except Exception as e:
-            logger.error(f"Errore parsing: {e}")
+            logger.error(f"❌ Errore parsing: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
         
         return None
-
-    def validate_deal(self, deal: Dict) -> bool:
-        """Valida il deal"""
-        required_fields = ['asin', 'title', 'current_price_pence']
-        
-        for field in required_fields:
-            if not deal.get(field):
-                return False
-        
-        asin = deal.get('asin', '')
-        if not re.match(r'^[A-Z0-9]{10}$', asin):
-            return False
-        
-        price = deal.get('current_price_pence', 0)
-        if price <= 0 or price > 10000000:
-            return False
-        
-        min_discount = int(os.getenv('MIN_DISCOUNT_PERCENT', 10))
-        discount = deal.get('discount_pct', 0)
-        if discount < min_discount:
-            return False
-        
-        return True
 
     async def scrape_channel_telethon(self) -> List[Dict]:
         """Scrape con Telethon"""
@@ -300,7 +230,7 @@ class DealWorkerUK:
         # Scrape con Telethon
         deals = await self.scrape_channel_telethon()
         
-        # Max 2 deals
+        # Max 2 deals per ciclo
         deals = deals[:2]
         
         self.last_scrape_time = datetime.now()
@@ -308,60 +238,18 @@ class DealWorkerUK:
         
         return deals
 
-    def build_affiliate_link(self, asin: str) -> str:
-        """Link affiliato"""
-        return f"https://amazon.co.uk/dp/{asin}?tag={self.affiliate_tag}"
-
-    def build_sharing_buttons(self, deal: Dict, affiliate_link: str) -> InlineKeyboardMarkup:
-        """Bottoni sharing"""
-        share_text = f"🔥 {deal['title']}\n💰 £{deal['current_price_pence']/100:.2f} ({deal['discount_pct']}% off)\n🛒 {affiliate_link}"
-        share_text_encoded = quote(share_text)
-        
-        keyboard = [
-            [InlineKeyboardButton("🛒 VIEW ON AMAZON", url=affiliate_link)],
-            [
-                InlineKeyboardButton("💬 WhatsApp", url=f"https://wa.me/?text={share_text_encoded}"),
-                InlineKeyboardButton("👍 Facebook", url=f"https://www.facebook.com/sharer/sharer.php?u={quote(affiliate_link)}")
-            ],
-            [
-                InlineKeyboardButton("𝕏 Twitter", url=f"https://twitter.com/intent/tweet?text={share_text_encoded}&url={quote(affiliate_link)}"),
-                InlineKeyboardButton("✈️ Telegram", url=f"https://t.me/share/url?url={quote(affiliate_link)}&text={share_text_encoded}")
-            ]
-        ]
-        
-        return InlineKeyboardMarkup(keyboard)
-
-    def format_deal_message(self, deal: Dict, amazon_url: str) -> str:
-        """Formato messaggio"""
-        current_price_pounds = deal['current_price_pence'] / 100
-        list_price_pounds = deal['list_price_pence'] / 100
-        discount = deal['discount_pct']
-        
-        message = f"""🔥 **DEAL ALERT** 🔥
-
-📦 {deal['title']}
-
-💰 **Prezzo**: £{current_price_pounds:.2f}
-~~£{list_price_pounds:.2f}~~
-
-🎯 **Sconto**: -{discount}%
-💾 **ASIN**: `{deal['asin']}`
-
-{amazon_url}"""
-        
-        return message
-
     async def post_deal(self, deal: Dict) -> bool:
-        """Posta deal"""
+        """Posta deal con messaggio originale"""
         try:
-            affiliate_link = self.build_affiliate_link(deal['asin'])
-            amazon_url = deal.get('amazon_url', affiliate_link)
-            message = self.format_deal_message(deal, amazon_url)
-            reply_markup = self.build_sharing_buttons(deal, affiliate_link)
+            message_text = deal['message_text']
+            affiliate_url = deal['affiliate_url']
+            
+            # Aggiungi bottoni di sharing
+            reply_markup = self.build_sharing_buttons_simple(affiliate_url)
             
             await self.bot.send_message(
                 chat_id=self.publish_channel_id,
-                text=message,
+                text=message_text,
                 parse_mode='Markdown',
                 reply_markup=reply_markup,
                 disable_web_page_preview=False
@@ -371,8 +259,29 @@ class DealWorkerUK:
             return True
             
         except Exception as e:
-            logger.error(f"Errore posting: {e}")
+            logger.error(f"❌ Errore posting: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             return False
+
+    def build_sharing_buttons_simple(self, affiliate_link: str) -> InlineKeyboardMarkup:
+        """Bottoni sharing semplificati"""
+        share_text = f"🔥 Amazon Deal UK\n🛒 {affiliate_link}"
+        share_text_encoded = quote(share_text)
+        
+        keyboard = [
+            [InlineKeyboardButton("🛒 VIEW ON AMAZON", url=affiliate_link)],
+            [
+                InlineKeyboardButton("💬 WhatsApp", url=f"https://wa.me/?text={share_text_encoded}"),
+                InlineKeyboardButton("👍 Facebook", url=f"https://www.facebook.com/sharer/sharer.php?u={quote(affiliate_link)}")
+            ],
+            [
+                InlineKeyboardButton("𝕏 Twitter", url=f"https://twitter.com/intent/tweet?text={share_text_encoded}"),
+                InlineKeyboardButton("✈️ Telegram", url=f"https://t.me/share/url?url={quote(affiliate_link)}&text={share_text_encoded}")
+            ]
+        ]
+        
+        return InlineKeyboardMarkup(keyboard)
 
 # Flask app
 app = Flask(__name__)
