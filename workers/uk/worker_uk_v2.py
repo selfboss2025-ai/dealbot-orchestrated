@@ -230,8 +230,8 @@ class DealWorkerUK:
         # Scrape con Telethon
         deals = await self.scrape_channel_telethon()
         
-        # Max 2 deals per ciclo
-        deals = deals[:2]
+        # Max 5 deals per ciclo
+        deals = deals[:5]
         
         self.last_scrape_time = datetime.now()
         logger.info(f"✅ Scraping completato: {len(deals)} deals")
