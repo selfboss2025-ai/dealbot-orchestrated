@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 class DealWorkerIT:
     def __init__(self):
         self.bot_token = os.getenv('WORKER_IT_BOT_TOKEN', '7948123806:AAF3nwK3n_kpyzcq1YWL71M5jPccvZYJF2w')
-        self.source_channel_id = int(os.getenv('SOURCE_CHANNEL_IT_ID', -1001294879762))
+        self.source_channel_id = int(os.getenv('SOURCE_CHANNEL_IT_ID', -1001771623915))
         self.publish_channel_id = int(os.getenv('PUBLISH_CHANNEL_IT_ID', -1001080585126))
         self.country = 'IT'
         self.affiliate_tag = 'srzone00-21'
