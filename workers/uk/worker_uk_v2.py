@@ -56,9 +56,32 @@ class DealWorkerUK:
         if self.telethon_connected:
             return
         
-        logger.info("⚠️ Telethon disabilitato per ora - usando solo test messages")
-        self.telethon_connected = False
-        return
+        try:
+            if not self.api_id or self.api_id == 0:
+                logger.warning("Telethon non configurato (API_ID = 0)")
+                return
+            
+            logger.info("🔗 Inizializzazione Telethon...")
+            session_path = '/tmp/session_uk'
+            self.telethon_client = TelegramClient(session_path, self.api_id, self.api_hash)
+            
+            # Timeout di 10 secondi per la connessione
+            try:
+                await asyncio.wait_for(
+                    self.telethon_client.start(phone=self.phone, force_sms=False),
+                    timeout=10.0
+                )
+                self.telethon_connected = True
+                logger.info("✅ Telethon connesso con successo")
+            except asyncio.TimeoutError:
+                logger.error("❌ Timeout connessione Telethon (10s)")
+                self.telethon_connected = False
+            
+        except Exception as e:
+            logger.error(f"❌ Errore inizializzazione Telethon: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            self.telethon_connected = False
 
     def extract_asin_from_url(self, url: str) -> Optional[str]:
         """Estrae ASIN da URL Amazon"""
@@ -250,7 +273,7 @@ class DealWorkerUK:
         return deals
 
     async def scrape_channel(self) -> List[Dict]:
-        """Scrape - Telethon + fallback test"""
+        """Scrape - Telethon"""
         logger.info("🔍 Scraping...")
         
         # Inizializza Telethon al primo scrape
@@ -260,37 +283,11 @@ class DealWorkerUK:
         # Prova Telethon
         deals = await self.scrape_channel_telethon()
         
-        # Fallback a test messages se Telethon non ha trovato nulla
-        if not deals:
-            logger.info("⚠️ Telethon non ha trovato deals, usando test messages...")
-            deals = await self._get_test_deals()
-        
         # Max 2 deals
         deals = deals[:2]
         
         self.last_scrape_time = datetime.now()
         logger.info(f"✅ Scraping completato: {len(deals)} deals")
-        
-        return deals
-
-    async def _get_test_deals(self) -> List[Dict]:
-        """Test messages"""
-        deals = []
-        
-        test_messages = [
-            """About £2.49 💥 50% Price drop https://www.amazon.co.uk/dp/B0DS63GM2Z/?tag=frb-dls-21&psc=1
-Ravensburger Disney Stitch Mini Memory Game
-#ad Price and promotions are accurate""",
-            
-            """About £9.99 💥 40% Price drop https://www.amazon.co.uk/dp/B0ABCDEF12/?tag=frb-dls-21
-Sony WH-CH720 Wireless Headphones
-#ad Price and promotions are accurate""",
-        ]
-        
-        for msg in test_messages:
-            deal = self.parse_message(msg)
-            if deal:
-                deals.append(deal)
         
         return deals
 
