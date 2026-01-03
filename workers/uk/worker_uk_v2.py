@@ -203,7 +203,7 @@ class DealWorkerUK:
                     if deal:
                         deals.append(deal)
                         deals_found += 1
-                        logger.info(f"✅ Deal {deals_found} trovato: {deal['asin']} - {deal['title'][:50]}")
+                        logger.info(f"✅ Deal {deals_found} trovato: {deal['asin']}")
                 
                 logger.info(f"✅ Telethon: {message_count} messaggi letti, {len(deals)} deals trovati")
                 
