@@ -56,32 +56,9 @@ class DealWorkerUK:
         if self.telethon_connected:
             return
         
-        try:
-            if not self.api_id or self.api_id == 0:
-                logger.warning("Telethon non configurato (API_ID = 0)")
-                return
-            
-            logger.info("🔗 Inizializzazione Telethon...")
-            session_path = '/tmp/session_uk'
-            self.telethon_client = TelegramClient(session_path, self.api_id, self.api_hash)
-            
-            # Timeout di 10 secondi per la connessione
-            try:
-                await asyncio.wait_for(
-                    self.telethon_client.start(phone=self.phone, force_sms=False),
-                    timeout=10.0
-                )
-                self.telethon_connected = True
-                logger.info("✅ Telethon connesso con successo")
-            except asyncio.TimeoutError:
-                logger.error("❌ Timeout connessione Telethon (10s)")
-                self.telethon_connected = False
-            
-        except Exception as e:
-            logger.error(f"❌ Errore inizializzazione Telethon: {e}")
-            import traceback
-            logger.error(traceback.format_exc())
-            self.telethon_connected = False
+        logger.info("⚠️ Telethon disabilitato per ora - usando solo test messages")
+        self.telethon_connected = False
+        return
 
     def extract_asin_from_url(self, url: str) -> Optional[str]:
         """Estrae ASIN da URL Amazon"""
