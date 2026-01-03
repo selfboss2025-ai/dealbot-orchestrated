@@ -99,7 +99,7 @@ class DealCoordinator:
         return f"https://{domain}/dp/{asin}?tag={affiliate_tag}"
     
     async def post_deal(self, deal: Dict, worker_config: Dict):
-        """Posta un singolo deal sul canale Telegram"""
+        """Posta un singolo deal sul canale Telegram con immagine"""
         try:
             # Il worker ha già preparato il messaggio con l'URL affiliato corretto
             message_text = deal.get('message_text')
@@ -136,17 +136,17 @@ class DealCoordinator:
             # Usa channel_id se disponibile, altrimenti channel name
             chat_id = worker_config.get('channel_id') or worker_config['channel']
             
-            # Invia come messaggio con preview automatica di Telegram
-            # L'URL affiliato è nei bottoni, Telegram mostrerà l'anteprima automaticamente
-            await self.bot.send_message(
+            # Invia come foto usando l'URL Amazon per scaricare l'immagine
+            # Il testo (caption) non contiene il link, solo nei bottoni
+            await self.bot.send_photo(
                 chat_id=chat_id,
-                text=message_text_clean,
+                photo=affiliate_url,
+                caption=message_text_clean,
                 parse_mode='Markdown',
-                reply_markup=reply_markup,
-                disable_web_page_preview=False
+                reply_markup=reply_markup
             )
             
-            logger.info(f"Deal postato: {deal['asin']} su {worker_config['channel']}")
+            logger.info(f"Deal postato con immagine: {deal['asin']} su {worker_config['channel']}")
             
         except TelegramError as e:
             logger.error(f"Errore Telegram posting deal {deal.get('asin', 'unknown')}: {e}")
