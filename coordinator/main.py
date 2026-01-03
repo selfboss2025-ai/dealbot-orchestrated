@@ -33,6 +33,8 @@ class DealCoordinator:
         
         # Worker UK
         worker_uk_url = os.getenv('WORKER_UK_URL', 'http://worker-uk:8001')
+        logger.info(f"DEBUG: WORKER_UK_URL env var = {os.getenv('WORKER_UK_URL')}")
+        logger.info(f"DEBUG: Using worker_uk_url = {worker_uk_url}")
         if worker_uk_url:
             self.workers['UK'] = {
                 'url': worker_uk_url,
