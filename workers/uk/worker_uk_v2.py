@@ -52,7 +52,7 @@ class DealWorkerUK:
         logger.info(f"Telethon API ID: {self.api_id}, Phone: {self.phone}")
 
     async def init_telethon(self):
-        """Inizializza Telethon una sola volta"""
+        """Inizializza Telethon con sessione pre-autenticata"""
         if self.telethon_connected:
             return
         
@@ -61,20 +61,18 @@ class DealWorkerUK:
                 logger.warning("Telethon non configurato (API_ID = 0)")
                 return
             
-            logger.info("🔗 Inizializzazione Telethon...")
+            logger.info("🔗 Inizializzazione Telethon con sessione esistente...")
             session_path = '/tmp/session_uk'
             self.telethon_client = TelegramClient(session_path, self.api_id, self.api_hash)
             
-            # Timeout di 10 secondi per la connessione
-            try:
-                await asyncio.wait_for(
-                    self.telethon_client.start(phone=self.phone, force_sms=False),
-                    timeout=10.0
-                )
+            # Connetti usando la sessione esistente (non richiede verifica)
+            await self.telethon_client.connect()
+            
+            if await self.telethon_client.is_user_authorized():
                 self.telethon_connected = True
-                logger.info("✅ Telethon connesso con successo")
-            except asyncio.TimeoutError:
-                logger.error("❌ Timeout connessione Telethon (10s)")
+                logger.info("✅ Telethon connesso con successo usando sessione esistente")
+            else:
+                logger.error("❌ Sessione non autorizzata")
                 self.telethon_connected = False
             
         except Exception as e:
@@ -245,13 +243,7 @@ class DealWorkerUK:
                 async for message in self.telethon_client.iter_messages(self.source_channel_id, limit=50):
                     message_count += 1
                     if not message.text:
-                        logger.debug(f"Messaggio {message.id} senza testo")
                         continue
-                    
-                    logger.debug(f"Messaggio {message.id}: {message.text[:50]}...")
-                    
-                    if message.id > self.last_message_id:
-                        self.last_message_id = message.id
                     
                     deal = self.parse_message(message.text)
                     if deal:
@@ -273,14 +265,14 @@ class DealWorkerUK:
         return deals
 
     async def scrape_channel(self) -> List[Dict]:
-        """Scrape - Telethon"""
+        """Scrape - Solo Telethon"""
         logger.info("🔍 Scraping...")
         
         # Inizializza Telethon al primo scrape
         if not self.telethon_connected:
             await self.init_telethon()
         
-        # Prova Telethon
+        # Scrape con Telethon
         deals = await self.scrape_channel_telethon()
         
         # Max 2 deals
