@@ -65,9 +65,17 @@ class DealWorkerUK:
             session_path = '/tmp/session_uk'
             self.telethon_client = TelegramClient(session_path, self.api_id, self.api_hash)
             
-            await self.telethon_client.start(phone=self.phone, force_sms=False)
-            self.telethon_connected = True
-            logger.info("✅ Telethon connesso con successo")
+            # Timeout di 10 secondi per la connessione
+            try:
+                await asyncio.wait_for(
+                    self.telethon_client.start(phone=self.phone, force_sms=False),
+                    timeout=10.0
+                )
+                self.telethon_connected = True
+                logger.info("✅ Telethon connesso con successo")
+            except asyncio.TimeoutError:
+                logger.error("❌ Timeout connessione Telethon (10s)")
+                self.telethon_connected = False
             
         except Exception as e:
             logger.error(f"❌ Errore inizializzazione Telethon: {e}")
@@ -268,12 +276,16 @@ class DealWorkerUK:
         """Scrape - Telethon + fallback test"""
         logger.info("🔍 Scraping...")
         
+        # Inizializza Telethon al primo scrape
+        if not self.telethon_connected:
+            await self.init_telethon()
+        
         # Prova Telethon
         deals = await self.scrape_channel_telethon()
         
-        # Fallback a test messages
+        # Fallback a test messages se Telethon non ha trovato nulla
         if not deals:
-            logger.info("⚠️ Usando test messages...")
+            logger.info("⚠️ Telethon non ha trovato deals, usando test messages...")
             deals = await self._get_test_deals()
         
         # Max 2 deals
@@ -424,14 +436,6 @@ def main():
         loop.close()
         
         logger.info(f"✅ Bot connesso: @{bot_info.username}")
-        
-        # Inizializza Telethon
-        logger.info("🔗 Inizializzazione Telethon...")
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        loop.run_until_complete(worker.init_telethon())
-        loop.close()
-        
         logger.info(f"🌐 Server HTTP su 0.0.0.0:8001")
         
         app.run(
