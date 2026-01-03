@@ -125,30 +125,54 @@ class DealWorkerIT:
             if not text or len(text.strip()) < 10:
                 return None
 
-            # Cerca URL Amazon IT
-            url_match = re.search(r'https://www\.amazon\.it/[^\s\n]+', text)
+            # Cerca URL Amazon IT (formato lungo o corto)
+            url_match = re.search(r'https://(?:www\.)?amazon\.it/[^\s\n]+', text)
+            if not url_match:
+                # Cerca link corti amzn.to o amzn.eu
+                url_match = re.search(r'https://amzn\.(?:to|eu)/[^\s\n]+', text)
+            
             if not url_match:
                 return None
             
             original_url = url_match.group(0)
             
-            # Estrai ASIN
-            asin = self.extract_asin_from_url(original_url)
-            if not asin:
-                return None
+            # Se è un link corto, espandilo per ottenere l'ASIN
+            if 'amzn.to' in original_url or 'amzn.eu' in original_url:
+                try:
+                    import requests
+                    # Segui il redirect per ottenere l'URL completo
+                    response = requests.head(original_url, allow_redirects=True, timeout=5)
+                    expanded_url = response.url
+                    
+                    # Estrai ASIN dall'URL espanso
+                    asin = self.extract_asin_from_url(expanded_url)
+                    if not asin:
+                        logger.debug(f"ASIN non trovato dopo espansione: {expanded_url}")
+                        return None
+                    
+                    # Costruisci il nuovo URL con il nostro tag
+                    new_url = f"https://www.amazon.it/dp/{asin}?tag={self.affiliate_tag}"
+                    
+                except Exception as e:
+                    logger.error(f"Errore espansione link corto {original_url}: {e}")
+                    return None
+            else:
+                # URL lungo - estrai ASIN direttamente
+                asin = self.extract_asin_from_url(original_url)
+                if not asin:
+                    return None
+                
+                # Sostituisci il tag affiliato nell'URL
+                new_url = re.sub(r'[?&]tag=[^&\s]+', '', original_url)
+                if '?' in new_url:
+                    new_url = f"{new_url}&tag={self.affiliate_tag}"
+                else:
+                    new_url = f"{new_url}?tag={self.affiliate_tag}"
 
             # Evita duplicati
             if asin in self.processed_asins:
                 return None
 
-            # Sostituisci il tag affiliato nell'URL
-            # Rimuovi il vecchio tag e aggiungi il nostro
-            new_url = re.sub(r'[?&]tag=[^&\s]+', '', original_url)
-            if '?' in new_url:
-                new_url = f"{new_url}&tag={self.affiliate_tag}"
-            else:
-                new_url = f"{new_url}?tag={self.affiliate_tag}"
-            
             # Sostituisci l'URL nel testo
             new_text = text.replace(original_url, new_url)
 
@@ -163,7 +187,7 @@ class DealWorkerIT:
             }
 
             self.processed_asins.add(asin)
-            logger.info(f"✅ Messaggio IT copiato: {asin}")
+            logger.info(f"✅ Messaggio IT copiato: {asin} (da {original_url})")
             return deal
 
         except Exception as e:
