@@ -43,9 +43,37 @@ class DealWorkerUK:
         self.api_hash = os.getenv('TELEGRAM_API_HASH', '')
         self.phone = os.getenv('TELEGRAM_PHONE', '')
         
+        self.telethon_client = None
+        self.telethon_connected = False
+        
         logger.info(f"🤖 Worker UK v2 inizializzato")
         logger.info(f"📺 Canale sorgente: {self.source_channel_id}")
         logger.info(f"📤 Canale pubblicazione: {self.publish_channel_id}")
+        logger.info(f"Telethon API ID: {self.api_id}, Phone: {self.phone}")
+
+    async def init_telethon(self):
+        """Inizializza Telethon una sola volta"""
+        if self.telethon_connected:
+            return
+        
+        try:
+            if not self.api_id or self.api_id == 0:
+                logger.warning("Telethon non configurato (API_ID = 0)")
+                return
+            
+            logger.info("🔗 Inizializzazione Telethon...")
+            session_path = '/tmp/session_uk'
+            self.telethon_client = TelegramClient(session_path, self.api_id, self.api_hash)
+            
+            await self.telethon_client.start(phone=self.phone, force_sms=False)
+            self.telethon_connected = True
+            logger.info("✅ Telethon connesso con successo")
+            
+        except Exception as e:
+            logger.error(f"❌ Errore inizializzazione Telethon: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            self.telethon_connected = False
 
     def extract_asin_from_url(self, url: str) -> Optional[str]:
         """Estrae ASIN da URL Amazon"""
@@ -197,26 +225,16 @@ class DealWorkerUK:
         deals = []
         
         try:
-            if not self.api_id or self.api_id == 0:
-                logger.warning("Telethon non configurato")
+            if not self.telethon_connected or not self.telethon_client:
+                logger.warning("Telethon non connesso")
                 return deals
             
             logger.info("🔍 Scraping con Telethon...")
-            logger.info(f"API ID: {self.api_id}, Phone: {self.phone}")
-            
-            # Usa session_uk in /tmp per evitare problemi di permessi in Docker
-            session_path = '/tmp/session_uk'
-            client = TelegramClient(session_path, self.api_id, self.api_hash)
             
             try:
-                # Connetti senza richiedere input (2FA disabilitato)
-                logger.info("Tentativo connessione Telethon...")
-                await client.start(phone=self.phone, force_sms=False)
-                logger.info("✅ Connesso a Telegram")
-                
                 logger.info(f"Lettura messaggi da canale {self.source_channel_id}...")
                 message_count = 0
-                async for message in client.iter_messages(self.source_channel_id, limit=50):
+                async for message in self.telethon_client.iter_messages(self.source_channel_id, limit=50):
                     message_count += 1
                     if not message.text:
                         logger.debug(f"Messaggio {message.id} senza testo")
@@ -234,8 +252,10 @@ class DealWorkerUK:
                 
                 logger.info(f"✅ Telethon: {message_count} messaggi letti, {len(deals)} deals trovati")
                 
-            finally:
-                await client.disconnect()
+            except Exception as e:
+                logger.error(f"Errore durante lettura messaggi: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
         
         except Exception as e:
             logger.error(f"Errore Telethon: {e}")
@@ -404,6 +424,14 @@ def main():
         loop.close()
         
         logger.info(f"✅ Bot connesso: @{bot_info.username}")
+        
+        # Inizializza Telethon
+        logger.info("🔗 Inizializzazione Telethon...")
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(worker.init_telethon())
+        loop.close()
+        
         logger.info(f"🌐 Server HTTP su 0.0.0.0:8001")
         
         app.run(
