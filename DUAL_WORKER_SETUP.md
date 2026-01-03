@@ -14,9 +14,9 @@
 │  ┌────────────────────┐    ┌────────────────────┐  │
 │  │  Worker UK         │    │  Worker IT         │  │
 │  │  Port: 8001        │    │  Port: 8002        │  │
-│  │  @NicePriceDeals   │    │  @salvatore_       │  │
-│  │  → @DealScoutUKBot │    │    aranzulla_      │  │
-│  │                    │    │    offerte         │  │
+│  │  @NicePriceDeals   │    │  @canaleofferte    │  │
+│  │  → @DealScoutUKBot │    │    tecnologia      │  │
+│  │                    │    │  → @AmazonIT       │  │
 │  │  Tag: ukbestdeal   │    │  → @AmazonIT       │  │
 │  │       02-21        │    │    DealScout       │  │
 │  │                    │    │                    │  │
@@ -65,7 +65,7 @@
 - **Sessione**: `/tmp/session_it.session`
 
 ### Canali
-- **Sorgente**: @salvatore_aranzulla_offerte (ID: -1001294879762)
+- **Sorgente**: @canaleoffertetecnologia (ID: -1001771623915)
 - **Pubblicazione**: @AmazonITDealScout (ID: -1001080585126)
 
 ### Amazon
@@ -216,7 +216,7 @@ grep "Coordinator" /var/log/container.log
 
 ### Per Ciclo (15 minuti)
 - Worker UK: 0-5 deals da @NicePriceDeals
-- Worker IT: 0-5 deals da @salvatore_aranzulla_offerte
+- Worker IT: 0-5 deals da @canaleoffertetecnologia
 - Totale: 0-10 deals pubblicati
 
 ### Per Ora
