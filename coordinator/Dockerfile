@@ -12,14 +12,10 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copia codice coordinatore
-COPY coordinator/ ./coordinator/
-
-# Crea utente non-root per sicurezza
-RUN useradd -m -u 1000 botuser && chown -R botuser:botuser /app
-USER botuser
+COPY coordinator/ ./
 
 # Esponi porta (opzionale per monitoring)
 EXPOSE 8000
 
 # Comando di avvio
-CMD ["python", "coordinator/main.py"]
+CMD ["python", "-u", "main.py"]
