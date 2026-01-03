@@ -181,6 +181,23 @@ class DealWorkerIT:
                 '#affiliate: https://tecnologia.libero.it/contatti',
                 '#affiliate: https://gomining.uk/amzn'
             )
+            
+            # Rimuovi righe promozionali comuni
+            promotional_patterns = [
+                r'PREZZO AL MINIMO.*?(?:COMPRA SUBITO|$)',
+                r'👉\s*AFFARE IMMEDIATO.*?(?:➡️|$)',
+                r'➡️\s*COMPRA SUBITO\s*➡️',
+                r'OFFERTA LAMPO.*?(?:\n|$)',
+                r'MINIMO STORICO.*?(?:\n|$)',
+                r'PREZZO IN PICCHIATA.*?(?:\n|$)',
+            ]
+            
+            for pattern in promotional_patterns:
+                new_text = re.sub(pattern, '', new_text, flags=re.IGNORECASE)
+            
+            # Pulisci spazi multipli e righe vuote
+            new_text = re.sub(r'\n\s*\n', '\n', new_text)
+            new_text = new_text.strip()
 
             # Costruisci deal con il messaggio completo
             deal = {
