@@ -99,7 +99,7 @@ class DealCoordinator:
         return f"https://{domain}/dp/{asin}?tag={affiliate_tag}"
     
     async def post_deal(self, deal: Dict, worker_config: Dict):
-        """Posta un singolo deal sul canale Telegram con immagine"""
+        """Posta un singolo deal sul canale Telegram"""
         try:
             # Il worker ha già preparato il messaggio con l'URL affiliato corretto
             message_text = deal.get('message_text')
@@ -109,12 +109,13 @@ class DealCoordinator:
                 logger.error(f"Deal {deal.get('asin', 'unknown')} mancante di message_text o affiliate_url")
                 return
             
-            # Rimuovi il link dal testo per nasconderlo
-            import re
-            message_text_clean = re.sub(r'https://www\.amazon\.co\.uk/[^\s\n]+', '', message_text).strip()
+            # Rimuovi il link dal testo per nasconderlo (opzionale)
+            # import re
+            # message_text_clean = re.sub(r'https://www\.amazon\.(co\.uk|it)/[^\s\n]+', '', message_text).strip()
+            # message_text_clean = re.sub(r'https://amzn\.(to|eu)/[^\s\n]+', '', message_text_clean).strip()
             
             # Crea bottoni di sharing
-            share_text = f"🔥 Amazon Deal UK\n🛒 {affiliate_url}"
+            share_text = f"🔥 Amazon Deal\n🛒 {affiliate_url}"
             share_text_encoded = quote(share_text)
             
             keyboard = [
@@ -133,28 +134,16 @@ class DealCoordinator:
             # Usa channel_id se disponibile, altrimenti channel name
             chat_id = worker_config.get('channel_id') or worker_config['channel']
             
-            # Prova a inviare con immagine scaricata dall'URL Amazon
-            try:
-                # Usa l'URL affiliato per ottenere l'anteprima con immagine
-                await self.bot.send_photo(
-                    chat_id=chat_id,
-                    photo=affiliate_url,
-                    caption=message_text_clean,
-                    parse_mode='Markdown',
-                    reply_markup=reply_markup
-                )
-                logger.info(f"Deal postato con immagine: {deal['asin']} su {worker_config['channel']}")
-            except Exception as e:
-                # Fallback: invia come messaggio normale se l'immagine non è disponibile
-                logger.warning(f"Impossibile inviare immagine per {deal['asin']}, invio come testo: {e}")
-                await self.bot.send_message(
-                    chat_id=chat_id,
-                    text=message_text_clean,
-                    parse_mode='Markdown',
-                    reply_markup=reply_markup,
-                    disable_web_page_preview=False
-                )
-                logger.info(f"Deal postato come testo: {deal['asin']} su {worker_config['channel']}")
+            # Invia come messaggio con preview automatica di Telegram
+            await self.bot.send_message(
+                chat_id=chat_id,
+                text=message_text,
+                parse_mode='Markdown',
+                reply_markup=reply_markup,
+                disable_web_page_preview=False
+            )
+            
+            logger.info(f"Deal postato: {deal['asin']} su {worker_config['channel']}")
             
         except TelegramError as e:
             logger.error(f"Errore Telegram posting deal {deal.get('asin', 'unknown')}: {e}")
