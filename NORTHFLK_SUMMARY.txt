@@ -1,0 +1,95 @@
+================================================================================
+                    PRONTO PER NORTHFLK
+                    Docker Compose Deploy
+================================================================================
+
+COSA FARE:
+
+1. Upload su Northflk:
+   git push
+   ssh user@northflk-server
+   git clone <repo>
+   cd dealbot
+
+2. Configura:
+   cp .env.example .env
+   nano .env
+   # Inserisci BOT_TOKEN coordinatore
+
+3. Deploy:
+   docker-compose build
+   docker-compose up -d
+
+4. Verifica:
+   docker-compose ps
+   docker-compose logs -f
+   curl http://localhost:8001/health | jq
+
+================================================================================
+
+DATI GIA CONFIGURATI:
+
+Bot UK:
+  ID: 7768046661
+  Username: @dealscoutuk_bot
+  Token: 7768046661:AAGh3C1k0WsykErjCJy-ZgKZRBYnrHFu13w
+
+Canali:
+  Sorgente: @NicePriceDeals (ID: -1001303541715)
+  Destinazione: @DealScoutUKBot (ID: -1001232723285)
+
+Affiliate:
+  Tag: ukbestdeal02-21
+
+================================================================================
+
+COSA SUCCEDE:
+
+1. Coordinatore avvia su Northflk
+2. Worker UK avvia su Northflk (porta 8001)
+3. Ogni 6 ore: coordinatore chiama worker
+4. Worker scrapa @NicePriceDeals
+5. Coordinatore posta deals su @DealScoutUKBot
+
+================================================================================
+
+COMANDI UTILI:
+
+Logs:
+  docker-compose logs -f
+
+Health check:
+  curl http://localhost:8001/health | jq
+
+Scrape test:
+  curl http://localhost:8001/scrape | jq
+
+Restart:
+  docker-compose restart
+
+Stop:
+  docker-compose stop
+
+================================================================================
+
+DOCUMENTAZIONE:
+
+NORTHFLK_QUICK.md      ← Leggi questo per quick start
+NORTHFLK_DEPLOY.md     ← Guida completa
+docker-compose.yml     ← Configurazione
+
+================================================================================
+
+PROSSIMI PASSI:
+
+1. Upload su Northflk
+2. Configura .env
+3. docker-compose build
+4. docker-compose up -d
+5. Monitora logs
+
+================================================================================
+
+PRONTO PER IL DEPLOY!
+
+================================================================================

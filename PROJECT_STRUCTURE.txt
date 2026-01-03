@@ -1,0 +1,217 @@
+DEAL BOT ORCHESTRATO - STRUTTURA PROGETTO
+═══════════════════════════════════════════════════════════════════
+
+dealbot-orchestrated/
+
+DOCUMENTAZIONE
+├── README.md                         ← Leggi per primo!
+├── QUICK_START.md                    ← Avvio rapido (5 min)
+├── SETUP_UK_WORKER.md                ← Setup dettagliato
+├── ARCHITECTURE.md                   ← Architettura sistema
+├── IMPLEMENTATION_SUMMARY.md          ← Riepilogo implementazione
+├── DEPLOYMENT_CHECKLIST.md           ← Checklist deploy
+└── PROJECT_STRUCTURE.txt             ← Questo file
+
+COORDINATORE CENTRALE
+├── coordinator/
+│   ├── main.py                       ← Bot coordinatore (350 linee)
+│   ├── Dockerfile                    ← Container coordinatore
+│   └── README.md                     ← Docs coordinatore
+└── [Configurazione in .env]
+
+WORKER BOT
+├── workers/
+│   ├── uk/                           ← WORKER UK COMPLETO
+│   │   ├── config.py                 ← Config UK (150 linee)
+│   │   ├── worker_uk.py              ← Worker UK (600 linee)
+│   │   ├── .env                      ← Variabili ambiente
+│   │   ├── Dockerfile                ← Container UK
+│   │   └── README.md                 ← Docs worker UK
+│   │
+│   └── template/                     ← TEMPLATE PER NUOVI PAESI
+│       ├── config.py                 ← Config template
+│       ├── SETUP_GUIDE.md            ← Guida setup
+│       └── .env.example              ← Env template
+
+SCRIPT DEPLOY & TEST
+├── scripts/
+│   ├── deploy-worker-uk.sh           ← Deploy worker UK
+│   ├── deploy-coordinator.sh         ← Deploy coordinatore
+│   ├── deploy-worker.sh              ← Template deploy
+│   ├── test-worker-uk.sh             ← Test worker UK
+│   └── test-system.sh                ← Test sistema completo
+
+DOCKER
+├── docker-compose.yml                ← Compose per dev
+├── coordinator/Dockerfile            ← Container coordinatore
+└── workers/uk/Dockerfile             ← Container worker UK
+
+CONFIGURAZIONE
+├── .env.example                      ← Template env coordinatore
+├── workers/uk/.env                   ← Env worker UK
+└── requirements.txt                  ← Dipendenze Python
+
+STATISTICHE
+├── File Python: 4 (1350 linee)
+├── File Config: 2 (150 linee)
+├── File Docs: 7 (1500 linee)
+├── File Script: 5 (400 linee)
+├── File Docker: 3 (100 linee)
+└── TOTALE: ~3500 linee di codice + documentazione
+
+═══════════════════════════════════════════════════════════════════
+
+COMPONENTI IMPLEMENTATI
+
+✅ Coordinatore Centrale
+   - Orchestrazione worker
+   - Scheduling ogni 6 ore
+   - Gestione affiliate links
+   - Pubblicazione Telegram
+   - Error handling
+
+✅ Worker UK
+   - Scraping @NicePriceDeals
+   - Parsing ASIN, prezzi, sconti
+   - Validazione deals
+   - Endpoint HTTP
+   - Health check
+
+✅ Template Worker
+   - Config generico
+   - Guida setup
+   - Pronto per IT, FR, DE, ES
+
+✅ Infrastruttura
+   - Docker support
+   - Script deploy
+   - Script test
+   - Logging strutturato
+
+✅ Documentazione
+   - Setup rapido
+   - Setup dettagliato
+   - Architettura
+   - Checklist deploy
+
+═══════════════════════════════════════════════════════════════════
+
+QUICK START
+
+1. Locale (Sviluppo):
+   cd workers/uk
+   python worker_uk.py
+
+2. Docker:
+   docker build -f workers/uk/Dockerfile -t dealscout-uk:latest .
+   docker run -d --name worker-uk -p 8001:8001 --env-file workers/uk/.env dealscout-uk:latest
+
+3. Script Deploy:
+   chmod +x scripts/deploy-worker-uk.sh
+   ./scripts/deploy-worker-uk.sh
+
+═══════════════════════════════════════════════════════════════════
+
+DATI CONFIGURATI
+
+Bot UK:
+  ID: 7768046661
+  Username: @dealscoutuk_bot
+  Token: 7768046661:AAGh3C1k0WsykErjCJy-ZgKZRBYnrHFu13w
+
+Canali:
+  Sorgente: @NicePriceDeals (ID: -1001303541715)
+  Destinazione: @DealScoutUKBot (ID: -1001232723285)
+
+Affiliate:
+  Tag: ukbestdeal02-21
+  Dominio: amazon.co.uk
+
+═══════════════════════════════════════════════════════════════════
+
+TEST RAPIDO
+
+curl http://localhost:8001/health
+curl http://localhost:8001/scrape
+curl http://localhost:8001/stats
+
+═══════════════════════════════════════════════════════════════════
+
+DOCUMENTAZIONE - Leggi in questo ordine:
+
+1. README.md                    ← Overview generale
+2. QUICK_START.md              ← Avvio rapido
+3. SETUP_UK_WORKER.md          ← Setup dettagliato
+4. ARCHITECTURE.md             ← Architettura
+5. IMPLEMENTATION_SUMMARY.md   ← Riepilogo
+6. DEPLOYMENT_CHECKLIST.md     ← Checklist
+
+═══════════════════════════════════════════════════════════════════
+
+PROSSIMI PASSI
+
+Fase 1: Validazione (Immediato)
+  [ ] Test worker UK locale
+  [ ] Test worker UK Docker
+  [ ] Verifica scraping
+  [ ] Verifica pubblicazione
+
+Fase 2: Espansione (1-2 settimane)
+  [ ] Creare worker IT
+  [ ] Creare worker FR
+  [ ] Creare worker DE
+  [ ] Aggiornare coordinatore
+
+Fase 3: Deploy (2-3 settimane)
+  [ ] Deploy coordinatore su Northflk
+  [ ] Deploy worker UK su VPS
+  [ ] Deploy worker IT su VPS
+  [ ] Configurare monitoring
+
+Fase 4: Ottimizzazione (Ongoing)
+  [ ] Database storico
+  [ ] Analytics
+  [ ] Alerting
+  [ ] Auto-scaling
+
+═══════════════════════════════════════════════════════════════════
+
+VANTAGGI ARCHITETTURA
+
+✅ Crash Isolation      - Un worker offline non blocca il sistema
+✅ Scalabilità          - Aggiungi worker senza modificare coordinatore
+✅ Flessibilità         - Worker su hardware diverso
+✅ Manutenzione         - Ogni componente ha responsabilità specifiche
+✅ Resilienza           - Error handling e retry logic
+✅ Monitoring           - Health check e stats endpoint
+✅ Logging              - Tracciamento completo operazioni
+✅ Compliance           - Solo parsing canali interni
+
+═══════════════════════════════════════════════════════════════════
+
+SUPPORTO RAPIDO
+
+Worker non risponde:
+  docker logs worker-uk -f
+  curl http://localhost:8001/health
+  docker restart worker-uk
+
+Nessun deal trovato:
+  1. Verifica bot sia membro di @NicePriceDeals
+  2. Controlla logs
+  3. Aumenta SCRAPE_LOOKBACK_HOURS
+
+Errore Telegram:
+  1. Verifica token bot
+  2. Verifica permessi canali
+  3. Controlla rate limiting
+
+═══════════════════════════════════════════════════════════════════
+
+IMPLEMENTAZIONE COMPLETATA - GENNAIO 2026
+
+Status: Pronto per il deploy
+Versione: 1.0
+Prossimo: Testare worker UK e procedere con altri paesi
+
+═══════════════════════════════════════════════════════════════════

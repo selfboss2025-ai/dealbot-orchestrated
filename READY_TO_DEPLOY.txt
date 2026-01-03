@@ -1,0 +1,80 @@
+================================================================================
+                    PRONTO PER IL DEPLOY SU NORTHFLK
+================================================================================
+
+CONFIGURAZIONE COMPLETATA:
+
+BOT COORDINATORE:
+  Token: 7935915288:AAHWLybhV0LDZoOZNEu9XZp57YJ7dft8ito
+
+BOT WORKER UK:
+  Token: 7768046661:AAGh3C1k0WsykErjCJy-ZgKZRBYnrHFu13w
+  Sorgente: @NicePriceDeals (ID: -1001303541715)
+  Destinazione: @DealScoutUKBot (ID: -1001232723285)
+
+AFFILIATE:
+  Tag: ukbestdeal02-21
+
+================================================================================
+
+COMANDI PER NORTHFLK:
+
+1. Connettiti:
+   ssh user@northflk-server
+   cd dealbot-orchestrated
+
+2. Build:
+   docker-compose build
+
+3. Avvia:
+   docker-compose up -d
+
+4. Verifica:
+   docker-compose ps
+   docker-compose logs -f
+   curl http://localhost:8001/health | jq
+
+================================================================================
+
+FILE IMPORTANTI:
+
+DEPLOY_NOW.md          ← Leggi questo per il deploy
+NORTHFLK_QUICK.md      ← Quick reference
+docker-compose.yml     ← Configurazione Docker
+.env                   ← Configurazione (già pronto)
+
+================================================================================
+
+COSA SUCCEDE:
+
+1. Coordinatore avvia su Northflk
+2. Worker UK avvia su Northflk (porta 8001)
+3. Ogni 6 ore: coordinatore scrapa deals
+4. Posta automaticamente su @DealScoutUKBot
+
+================================================================================
+
+COMANDI UTILI:
+
+Logs:
+  docker-compose logs -f
+
+Health check:
+  curl http://localhost:8001/health | jq
+
+Scrape test:
+  curl http://localhost:8001/scrape | jq
+
+Restart:
+  docker-compose restart
+
+Stop:
+  docker-compose stop
+
+================================================================================
+
+PRONTO PER IL DEPLOY!
+
+Procedi con i comandi in DEPLOY_NOW.md
+
+================================================================================
