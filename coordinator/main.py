@@ -43,13 +43,15 @@ class DealCoordinator:
             logger.info(f"Worker UK configurato: {worker_uk_url}")
         
         # Worker IT (opzionale)
-        if os.getenv('WORKER_IT_URL'):
+        worker_it_url = os.getenv('WORKER_IT_URL', 'http://127.0.0.1:8002')
+        if worker_it_url:
             self.workers['IT'] = {
-                'url': os.getenv('WORKER_IT_URL'),
+                'url': worker_it_url,
                 'channel': os.getenv('IT_CHANNEL', '@AmazonITDealScout'),
-                'channel_id': os.getenv('IT_CHANNEL_ID'),
+                'channel_id': int(os.getenv('IT_CHANNEL_ID', -1001080585126)),
                 'affiliate_tag': 'srzone00-21'
             }
+            logger.info(f"Worker IT configurato: {worker_it_url}")
         
         self.scheduler = AsyncIOScheduler()
         
