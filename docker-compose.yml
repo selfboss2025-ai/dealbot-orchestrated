@@ -1,62 +1,31 @@
 version: '3.8'
 
 services:
-  # Bot Coordinatore Centrale (Northflk)
-  coordinator:
+  # Bot Orchestrato - Coordinator + Worker UK in un unico container
+  dealscout:
     build: 
       context: .
-      dockerfile: coordinator/Dockerfile
-    container_name: coordinator
+      dockerfile: Dockerfile
+    container_name: dealscout
     environment:
       - BOT_TOKEN=${BOT_TOKEN}
-      - UK_CHANNEL=${UK_CHANNEL}
-      - UK_CHANNEL_ID=${UK_CHANNEL_ID}
-      - WORKER_UK_URL=http://worker-uk:8001
-    restart: unless-stopped
-    depends_on:
-      worker-uk:
-        condition: service_healthy
-    networks:
-      - dealbot-network
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-  # Worker Bot UK (Northflk)
-  worker-uk:
-    build:
-      context: .
-      dockerfile: workers/uk/Dockerfile
-    container_name: worker-uk
-    environment:
       - WORKER_BOT_TOKEN=${WORKER_BOT_TOKEN}
-      - WORKER_PORT=8001
       - SOURCE_CHANNEL_ID=${SOURCE_CHANNEL_ID}
       - PUBLISH_CHANNEL_ID=${PUBLISH_CHANNEL_ID}
+      - UK_CHANNEL=${UK_CHANNEL}
+      - UK_CHANNEL_ID=${UK_CHANNEL_ID}
+      - WORKER_UK_URL=http://127.0.0.1:8001
       - MIN_DISCOUNT_PERCENT=${MIN_DISCOUNT_PERCENT:-10}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - TELEGRAM_API_ID=${TELEGRAM_API_ID}
       - TELEGRAM_API_HASH=${TELEGRAM_API_HASH}
       - TELEGRAM_PHONE=${TELEGRAM_PHONE}
     ports:
+      - "8000:8000"
       - "8001:8001"
     restart: unless-stopped
-    networks:
-      - dealbot-network
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-
-networks:
-  dealbot-network:
-    driver: bridge
