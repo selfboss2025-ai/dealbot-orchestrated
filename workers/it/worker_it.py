@@ -175,6 +175,12 @@ class DealWorkerIT:
 
             # Sostituisci l'URL nel testo
             new_text = text.replace(original_url, new_url)
+            
+            # Sostituisci anche il link affiliate disclosure
+            new_text = new_text.replace(
+                '#affiliate: https://tecnologia.libero.it/contatti',
+                '#affiliate: https://gomining.uk/amzn'
+            )
 
             # Costruisci deal con il messaggio completo
             deal = {
