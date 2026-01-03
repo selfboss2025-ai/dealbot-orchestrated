@@ -76,8 +76,14 @@ class DealCoordinator:
         except requests.exceptions.Timeout:
             logger.error(f"Worker {country}: timeout dopo 30s")
             return []
-        except requests.exceptions.ConnectionError:
-            logger.error(f"Worker {country}: connessione fallita")
+        except requests.exceptions.ConnectionError as e:
+            logger.error(f"Worker {country}: connessione fallita - {e}")
+            return []
+        except Exception as e:
+            logger.error(f"Worker {country}: errore generico - {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return []
             return []
         except Exception as e:
             logger.error(f"Worker {country}: errore generico: {e}")
