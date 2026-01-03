@@ -62,15 +62,32 @@ class DealWorkerUK:
                 return
             
             logger.info("🔗 Inizializzazione Telethon con sessione esistente...")
+            logger.info(f"API ID: {self.api_id}, API Hash: {self.api_hash[:10]}..., Phone: {self.phone}")
+            
             session_path = '/tmp/session_uk'
+            logger.info(f"Session path: {session_path}")
+            
+            # Verifica se il file di sessione esiste
+            import os
+            session_file = f"{session_path}.session"
+            if os.path.exists(session_file):
+                logger.info(f"✅ File sessione trovato: {session_file}")
+            else:
+                logger.error(f"❌ File sessione NON trovato: {session_file}")
+                self.telethon_connected = False
+                return
+            
             self.telethon_client = TelegramClient(session_path, self.api_id, self.api_hash)
             
             # Connetti usando la sessione esistente (non richiede verifica)
+            logger.info("Connessione a Telegram...")
             await self.telethon_client.connect()
+            logger.info("Connessione stabilita, verifica autorizzazione...")
             
             if await self.telethon_client.is_user_authorized():
                 self.telethon_connected = True
-                logger.info("✅ Telethon connesso con successo usando sessione esistente")
+                me = await self.telethon_client.get_me()
+                logger.info(f"✅ Telethon connesso con successo - User: {me.first_name} (@{me.username})")
             else:
                 logger.error("❌ Sessione non autorizzata")
                 self.telethon_connected = False
@@ -232,7 +249,8 @@ class DealWorkerUK:
         
         try:
             if not self.telethon_connected or not self.telethon_client:
-                logger.warning("Telethon non connesso")
+                logger.error("❌ Telethon non connesso - impossibile fare scraping")
+                logger.error(f"telethon_connected: {self.telethon_connected}, telethon_client: {self.telethon_client is not None}")
                 return deals
             
             logger.info("🔍 Scraping con Telethon...")
@@ -240,25 +258,32 @@ class DealWorkerUK:
             try:
                 logger.info(f"Lettura messaggi da canale {self.source_channel_id}...")
                 message_count = 0
+                deals_found = 0
+                
                 async for message in self.telethon_client.iter_messages(self.source_channel_id, limit=50):
                     message_count += 1
+                    
+                    if message_count <= 3:
+                        logger.info(f"Messaggio {message_count}: {message.text[:100] if message.text else 'NO TEXT'}...")
+                    
                     if not message.text:
                         continue
                     
                     deal = self.parse_message(message.text)
                     if deal:
                         deals.append(deal)
-                        logger.info(f"✅ Deal trovato: {deal['asin']}")
+                        deals_found += 1
+                        logger.info(f"✅ Deal {deals_found} trovato: {deal['asin']} - {deal['title'][:50]}")
                 
                 logger.info(f"✅ Telethon: {message_count} messaggi letti, {len(deals)} deals trovati")
                 
             except Exception as e:
-                logger.error(f"Errore durante lettura messaggi: {e}")
+                logger.error(f"❌ Errore durante lettura messaggi: {e}")
                 import traceback
                 logger.error(traceback.format_exc())
         
         except Exception as e:
-            logger.error(f"Errore Telethon: {e}")
+            logger.error(f"❌ Errore Telethon: {e}")
             import traceback
             logger.error(traceback.format_exc())
         
