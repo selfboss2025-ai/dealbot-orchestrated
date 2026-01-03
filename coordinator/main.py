@@ -96,114 +96,52 @@ class DealCoordinator:
         domain = domain_map.get(country, 'amazon.com')
         return f"https://{domain}/dp/{asin}?tag={affiliate_tag}"
     
-    def build_sharing_buttons(self, deal: Dict, affiliate_link: str) -> InlineKeyboardMarkup:
-        """Costruisce i bottoni di sharing per social media"""
-        
-        # Testo per il sharing
-        share_text = f"🔥 {deal['title']}\n💰 £{deal['current_price_pence']/100:.2f} ({deal['discount_pct']}% off)\n🛒 {affiliate_link}"
-        share_text_encoded = quote(share_text)
-        
-        # Bottoni
-        keyboard = [
-            [
-                # Bottone Amazon
-                InlineKeyboardButton(
-                    "🛒 VIEW ON AMAZON",
-                    url=affiliate_link
-                )
-            ],
-            [
-                # Bottoni sharing
-                InlineKeyboardButton(
-                    "💬 WhatsApp",
-                    url=f"https://wa.me/?text={share_text_encoded}"
-                ),
-                InlineKeyboardButton(
-                    "👍 Facebook",
-                    url=f"https://www.facebook.com/sharer/sharer.php?u={quote(affiliate_link)}"
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    "𝕏 Twitter",
-                    url=f"https://twitter.com/intent/tweet?text={share_text_encoded}&url={quote(affiliate_link)}"
-                ),
-                InlineKeyboardButton(
-                    "✈️ Telegram",
-                    url=f"https://t.me/share/url?url={quote(affiliate_link)}&text={share_text_encoded}"
-                )
-            ]
-        ]
-        
-        return InlineKeyboardMarkup(keyboard)
-    
-    def format_deal_message(self, deal: Dict, affiliate_link: str) -> str:
-        """Formatta il messaggio del deal per Telegram"""
-        discount = deal.get('discount_pct', 0)
-        current_price = deal['current_price_pence'] / 100
-        list_price = deal['list_price_pence'] / 100
-        
-        currency = '£' if deal['country'] == 'UK' else '€'
-        
-        message = f"""🔥 **DEAL ALERT** 🔥
-
-📦 {deal['title']}
-
-💰 **Prezzo**: {currency}{current_price:.2f}
-~~{currency}{list_price:.2f}~~
-
-🎯 **Sconto**: -{discount}%
-💾 **ASIN**: {deal['asin']}"""
-        
-        return message
-    
     async def post_deal(self, deal: Dict, worker_config: Dict):
-        """Posta un singolo deal sul canale Telegram con bottoni"""
+        """Posta un singolo deal sul canale Telegram"""
         try:
-            affiliate_link = self.build_affiliate_link(
-                deal['asin'], 
-                deal['country'], 
-                worker_config['affiliate_tag']
-            )
+            # Il worker ha già preparato il messaggio con l'URL affiliato corretto
+            message_text = deal.get('message_text')
+            affiliate_url = deal.get('affiliate_url')
             
-            message = self.format_deal_message(deal, affiliate_link)
-            reply_markup = self.build_sharing_buttons(deal, affiliate_link)
+            if not message_text or not affiliate_url:
+                logger.error(f"Deal {deal.get('asin', 'unknown')} mancante di message_text o affiliate_url")
+                return
+            
+            # Crea bottoni di sharing
+            share_text = f"🔥 Amazon Deal UK\n🛒 {affiliate_url}"
+            share_text_encoded = quote(share_text)
+            
+            keyboard = [
+                [InlineKeyboardButton("🛒 VIEW ON AMAZON", url=affiliate_url)],
+                [
+                    InlineKeyboardButton("💬 WhatsApp", url=f"https://wa.me/?text={share_text_encoded}"),
+                    InlineKeyboardButton("👍 Facebook", url=f"https://www.facebook.com/sharer/sharer.php?u={quote(affiliate_url)}")
+                ],
+                [
+                    InlineKeyboardButton("𝕏 Twitter", url=f"https://twitter.com/intent/tweet?text={share_text_encoded}"),
+                    InlineKeyboardButton("✈️ Telegram", url=f"https://t.me/share/url?url={quote(affiliate_url)}&text={share_text_encoded}")
+                ]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
             
             # Usa channel_id se disponibile, altrimenti channel name
             chat_id = worker_config.get('channel_id') or worker_config['channel']
             
-            # Posta con immagine se disponibile
-            if deal.get('image_url'):
-                try:
-                    await self.bot.send_photo(
-                        chat_id=chat_id,
-                        photo=deal['image_url'],
-                        caption=message,
-                        parse_mode='Markdown',
-                        reply_markup=reply_markup
-                    )
-                except Exception as e:
-                    logger.warning(f"Errore invio foto, provo senza: {e}")
-                    await self.bot.send_message(
-                        chat_id=chat_id,
-                        text=message,
-                        parse_mode='Markdown',
-                        reply_markup=reply_markup
-                    )
-            else:
-                await self.bot.send_message(
-                    chat_id=chat_id,
-                    text=message,
-                    parse_mode='Markdown',
-                    reply_markup=reply_markup
-                )
+            # Posta il messaggio
+            await self.bot.send_message(
+                chat_id=chat_id,
+                text=message_text,
+                parse_mode='Markdown',
+                reply_markup=reply_markup,
+                disable_web_page_preview=False
+            )
                 
             logger.info(f"Deal postato: {deal['asin']} su {worker_config['channel']}")
             
         except TelegramError as e:
-            logger.error(f"Errore Telegram posting deal {deal['asin']}: {e}")
+            logger.error(f"Errore Telegram posting deal {deal.get('asin', 'unknown')}: {e}")
         except Exception as e:
-            logger.error(f"Errore generico posting deal {deal['asin']}: {e}")
+            logger.error(f"Errore generico posting deal {deal.get('asin', 'unknown')}: {e}")
     
     async def process_deals(self):
         """Processo principale: chiama tutti i worker e posta i deals"""
