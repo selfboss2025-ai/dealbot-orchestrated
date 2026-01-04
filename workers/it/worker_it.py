@@ -237,13 +237,8 @@ class DealWorkerIT:
                 message_count = 0
                 deals_found = 0
                 
-                async for message in self.telethon_client.iter_messages(self.source_channel_id, limit=50):
+                async for message in self.telethon_client.iter_messages(self.source_channel_id, limit=5):
                     message_count += 1
-                    
-                    # Ferma se abbiamo già 5 deals
-                    if len(deals) >= 5:
-                        logger.info(f"⚠️ Limite 5 deals raggiunto, stop scraping")
-                        break
                     
                     if message_count <= 3:
                         logger.info(f"Messaggio IT {message_count}: {message.text[:100] if message.text else 'NO TEXT'}...")
@@ -279,11 +274,8 @@ class DealWorkerIT:
         if not self.telethon_connected:
             await self.init_telethon()
         
-        # Scrape con Telethon
+        # Scrape con Telethon (già limitato a 5 messaggi)
         deals = await self.scrape_channel_telethon()
-        
-        # Max 5 deals per ciclo
-        deals = deals[:5]
         
         self.last_scrape_time = datetime.now()
         logger.info(f"✅ Scraping IT completato: {len(deals)} deals")
