@@ -295,19 +295,17 @@ def scrape_endpoint():
             return jsonify({'error': 'Worker non inizializzato'}), 500
         
         # Usa l'event loop esistente se disponibile, altrimenti creane uno nuovo
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_closed():
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-        
-        deals = loop.run_until_complete(worker.scrape_channel())
-        
-        logger.info(f"📊 Endpoint /scrape: {len(deals)} deals")
-        return jsonify(deals)
+        # Usa l'event loop esistente se disponibile, altrimenti creane uno nuovo
+try:
+    loop = asyncio.get_event_loop()
+    if loop.is_closed():
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+except RuntimeError:
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+deals = loop.run_until_complete(worker.scrape_channel())
         
     except Exception as e:
         logger.error(f"Errore /scrape: {e}")
