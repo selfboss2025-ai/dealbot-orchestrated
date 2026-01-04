@@ -240,6 +240,11 @@ class DealWorkerIT:
                 async for message in self.telethon_client.iter_messages(self.source_channel_id, limit=50):
                     message_count += 1
                     
+                    # Ferma se abbiamo già 5 deals
+                    if len(deals) >= 5:
+                        logger.info(f"⚠️ Limite 5 deals raggiunto, stop scraping")
+                        break
+                    
                     if message_count <= 3:
                         logger.info(f"Messaggio IT {message_count}: {message.text[:100] if message.text else 'NO TEXT'}...")
                     
