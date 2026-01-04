@@ -36,7 +36,11 @@ class DealWorkerIT:
         self.bot = Bot(token=self.bot_token)
         self.processed_asins = set()
         self.last_scrape_time = None
-        self.last_message_id = 0
+        self.last_message_id = 0  # Traccia l'ultimo messaggio processato
+        
+        # Carica l'ultimo message_id dal file se esiste
+        self.state_file = '/tmp/worker_it_state.txt'
+        self._load_state()
         
         # Telethon client
         self.api_id = int(os.getenv('TELEGRAM_API_ID', '0'))
@@ -49,7 +53,28 @@ class DealWorkerIT:
         logger.info(f"🤖 Worker IT inizializzato")
         logger.info(f"📺 Canale sorgente: {self.source_channel_id}")
         logger.info(f"📤 Canale pubblicazione: {self.publish_channel_id}")
+        logger.info(f"📍 Ultimo message_id: {self.last_message_id}")
         logger.info(f"Telethon API ID: {self.api_id}, Phone: {self.phone}")
+    
+    def _load_state(self):
+        """Carica lo stato dall'ultimo scraping"""
+        try:
+            if os.path.exists(self.state_file):
+                with open(self.state_file, 'r') as f:
+                    self.last_message_id = int(f.read().strip())
+                logger.info(f"✅ State IT caricato: last_message_id={self.last_message_id}")
+        except Exception as e:
+            logger.warning(f"⚠️ Impossibile caricare state IT: {e}")
+            self.last_message_id = 0
+    
+    def _save_state(self):
+        """Salva lo stato per il prossimo scraping"""
+        try:
+            with open(self.state_file, 'w') as f:
+                f.write(str(self.last_message_id))
+            logger.info(f"✅ State IT salvato: last_message_id={self.last_message_id}")
+        except Exception as e:
+            logger.error(f"❌ Errore salvataggio state IT: {e}")
 
     async def init_telethon(self):
         """Inizializza Telethon con sessione pre-autenticata"""
@@ -234,14 +259,25 @@ class DealWorkerIT:
             
             try:
                 logger.info(f"Lettura messaggi da canale IT {self.source_channel_id}...")
+                logger.info(f"Ultimo message_id IT processato: {self.last_message_id}")
                 message_count = 0
                 deals_found = 0
+                new_last_message_id = self.last_message_id
                 
                 async for message in self.telethon_client.iter_messages(self.source_channel_id, limit=5):
                     message_count += 1
                     
+                    # Aggiorna l'ultimo message_id visto
+                    if message.id > new_last_message_id:
+                        new_last_message_id = message.id
+                    
+                    # Salta messaggi già processati
+                    if message.id <= self.last_message_id:
+                        logger.info(f"⏭️ Messaggio IT {message.id} già processato, skip")
+                        continue
+                    
                     if message_count <= 3:
-                        logger.info(f"Messaggio IT {message_count}: {message.text[:100] if message.text else 'NO TEXT'}...")
+                        logger.info(f"Messaggio IT {message_count} (ID: {message.id}): {message.text[:100] if message.text else 'NO TEXT'}...")
                     
                     if not message.text:
                         continue
@@ -251,6 +287,11 @@ class DealWorkerIT:
                         deals.append(deal)
                         deals_found += 1
                         logger.info(f"✅ Deal IT {deals_found} trovato: {deal['asin']}")
+                
+                # Salva il nuovo last_message_id
+                if new_last_message_id > self.last_message_id:
+                    self.last_message_id = new_last_message_id
+                    self._save_state()
                 
                 logger.info(f"✅ Telethon IT: {message_count} messaggi letti, {len(deals)} deals trovati")
                 
